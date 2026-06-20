@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Briefcase,
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Loader2,
   PlusCircle,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import {
@@ -17,7 +18,14 @@ import {
   type JobApplication,
   type ApplicationStatus,
   type Resume,
+  type Stage1Analysis,
 } from "../lib/supabase";
+
+const API_URL =
+  (import.meta.env.VITE_DOCMIND_API_URL as string | undefined)?.replace(
+    /\/+$/,
+    ""
+  ) ?? "";
 
 // ---------------------------------------------------------------------------
 // Status display config
@@ -26,21 +34,268 @@ const STATUS_CONFIG: Record<
   ApplicationStatus,
   { label: string; color: string; bg: string }
 > = {
-  to_apply:            { label: "To Apply",    color: "text-ink/60",    bg: "bg-ink/5" },
-  pending_processing:  { label: "Queued",       color: "text-amber",     bg: "bg-amber/10" },
-  processing:          { label: "Processing",   color: "text-signal",    bg: "bg-signal/10" },
-  stage1_complete:     { label: "Analysed",     color: "text-moss",      bg: "bg-moss/10" },
-  ready:               { label: "Ready",        color: "text-fern",      bg: "bg-fern/10" },
-  error:               { label: "Error",        color: "text-red-500",   bg: "bg-red-50" },
-  applied:             { label: "Applied",      color: "text-signal",    bg: "bg-signal/10" },
-  interview:           { label: "Interview",    color: "text-moss",      bg: "bg-moss/10" },
-  offer:               { label: "Offer!",       color: "text-fern",      bg: "bg-fern/20" },
-  rejected:            { label: "Rejected",     color: "text-ink/40",    bg: "bg-ink/5" },
+  to_apply:            { label: "To Apply",   color: "text-ink/60",  bg: "bg-ink/5" },
+  pending_processing:  { label: "Queued",      color: "text-amber",   bg: "bg-amber/10" },
+  processing:          { label: "Processing",  color: "text-signal",  bg: "bg-signal/10" },
+  stage1_complete:     { label: "Analysed",    color: "text-moss",    bg: "bg-moss/10" },
+  ready:               { label: "Ready",       color: "text-fern",    bg: "bg-fern/10" },
+  error:               { label: "Error",       color: "text-red-500", bg: "bg-red-50" },
+  applied:             { label: "Applied",     color: "text-signal",  bg: "bg-signal/10" },
+  interview:           { label: "Interview",   color: "text-moss",    bg: "bg-moss/10" },
+  offer:               { label: "Offer!",      color: "text-fern",    bg: "bg-fern/20" },
+  rejected:            { label: "Rejected",    color: "text-ink/40",  bg: "bg-ink/5" },
 };
 
 const PIPELINE_STATUSES: ApplicationStatus[] = [
-  "pending_processing", "processing", "stage1_complete", "ready"
+  "pending_processing", "processing", "stage1_complete", "ready",
 ];
+
+// ---------------------------------------------------------------------------
+// Match score circle
+// ---------------------------------------------------------------------------
+function ScoreCircle({ score }: { score: number }) {
+  const color =
+    score >= 75 ? "#4caf7d" : score >= 50 ? "#f5a623" : "#ef4444";
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <svg width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="22" fill="none" stroke="#e5e7eb" strokeWidth="5" />
+        <circle
+          cx="26" cy="26" r="22"
+          fill="none"
+          stroke={color}
+          strokeWidth="5"
+          strokeDasharray={`${(score / 100) * 138.2} 138.2`}
+          strokeLinecap="round"
+          transform="rotate(-90 26 26)"
+        />
+        <text x="26" y="31" textAnchor="middle" fontSize="13" fontWeight="700" fill={color}>
+          {score}
+        </text>
+      </svg>
+      <span className="text-xs text-ink/40">/ 100</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Quick Skills Check panel
+// ---------------------------------------------------------------------------
+function QuickSkillsPanel() {
+  const [open, setOpen] = useState(false);
+  const [resumeText, setResumeText] = useState("");
+  const [jdText, setJdText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<Stage1Analysis | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const apiReady = Boolean(API_URL);
+
+  async function analyse() {
+    if (!resumeText.trim() || !jdText.trim()) {
+      setErr("Paste both your resume text and the job description.");
+      return;
+    }
+    setLoading(true);
+    setErr(null);
+    setResult(null);
+    try {
+      const res = await fetch(`${API_URL}/extract-skills`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_text: resumeText, jd_text: jdText }),
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as Stage1Analysis;
+      setResult(data);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mb-6 rounded-xl border border-ink/10 bg-white/80 shadow-sm overflow-hidden">
+      {/* Header toggle */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 px-5 py-3.5 text-left hover:bg-ink/3 transition-colors"
+      >
+        <Sparkles size={16} className="shrink-0 text-moss" />
+        <span className="flex-1 text-sm font-semibold text-ink">
+          Quick Skills Check
+        </span>
+        <span className="text-xs text-ink/40 mr-2">
+          Paste resume + JD → instant gap analysis
+        </span>
+        {open ? (
+          <ChevronUp size={15} className="shrink-0 text-ink/30" />
+        ) : (
+          <ChevronDown size={15} className="shrink-0 text-ink/30" />
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-ink/10 px-5 py-4 space-y-4">
+          {!apiReady && (
+            <p className="rounded-md bg-amber/10 px-3 py-2 text-sm text-amber">
+              Set <code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> to your Cloudflare tunnel URL to enable this feature.
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-ink/50">
+                Your resume (paste as plain text)
+              </label>
+              <textarea
+                rows={10}
+                value={resumeText}
+                onChange={(e) => setResumeText(e.target.value)}
+                placeholder="Paste your resume text here…"
+                className="w-full resize-y rounded-md border border-ink/15 bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink/25 focus:border-moss focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-ink/50">
+                Job description (paste as plain text)
+              </label>
+              <textarea
+                rows={10}
+                value={jdText}
+                onChange={(e) => setJdText(e.target.value)}
+                placeholder="Paste the job description here…"
+                className="w-full resize-y rounded-md border border-ink/15 bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink/25 focus:border-moss focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {err && (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+              {err}
+            </p>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={analyse}
+              disabled={loading || !apiReady}
+              className="flex items-center gap-2 rounded-md bg-moss px-5 py-2 text-sm font-semibold text-white disabled:bg-ink/25 hover:bg-moss/90 transition-colors"
+            >
+              {loading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Sparkles size={14} />
+              )}
+              {loading ? "Analysing…" : "Analyse with AI"}
+            </button>
+            {result && (
+              <button
+                onClick={() => { setResult(null); setResumeText(""); setJdText(""); }}
+                className="text-sm text-ink/40 hover:text-ink"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Results */}
+          {result && (
+            <div className="rounded-xl border border-ink/10 bg-paper p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {/* Score + pitch */}
+              <div className="flex items-center gap-5">
+                <ScoreCircle score={result.match_score} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-ink/40 mb-1">Your pitch for this role</p>
+                  <p className="text-sm italic text-ink/80 leading-relaxed">
+                    "{result.one_line_pitch}"
+                  </p>
+                </div>
+              </div>
+
+              {/* Missing keywords */}
+              {result.missing_keywords.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">
+                    Missing keywords ({result.missing_keywords.length}) — add these to your resume
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.missing_keywords.map((kw) => (
+                      <span
+                        key={kw}
+                        className="rounded-full bg-amber/15 px-2.5 py-0.5 text-xs font-medium text-amber"
+                      >
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Matched skills */}
+              {result.matched_skills.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">
+                    Matched skills ({result.matched_skills.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.matched_skills.map((s) => (
+                      <span
+                        key={s}
+                        className="rounded-full bg-fern/15 px-2.5 py-0.5 text-xs font-medium text-fern"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Core highlights */}
+              {result.core_highlights.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">
+                    Your strongest selling points
+                  </p>
+                  <ul className="space-y-1">
+                    {result.core_highlights.map((h) => (
+                      <li key={h} className="flex items-start gap-2 text-sm text-ink/70">
+                        <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-fern" />
+                        {h}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Recommended projects */}
+              {result.recommended_projects.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">
+                    Portfolio projects to highlight
+                  </p>
+                  <div className="space-y-2">
+                    {result.recommended_projects.map((p) => (
+                      <div key={p.project_name} className="rounded-md border border-ink/10 bg-white px-3 py-2 text-sm">
+                        <p className="font-medium text-ink">{p.project_name}</p>
+                        <p className="text-xs text-ink/50 mt-0.5">{p.relevance_reason}</p>
+                        <p className="mt-1 text-xs text-moss">→ {p.suggested_highlight}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Add Application Modal
@@ -226,7 +481,9 @@ function ApplicationRow({ app, onStatusChange }: {
             {app.application_date
               ? new Date(app.application_date).toLocaleDateString()
               : "No date"}
-            {app.match_score != null && ` · Match: ${app.match_score}%`}
+            {app.match_score != null && (
+              <span className="ml-1 font-medium text-moss">· {app.match_score}% match</span>
+            )}
           </p>
         </div>
 
@@ -276,21 +533,22 @@ function ApplicationRow({ app, onStatusChange }: {
 
           {/* AI Analysis (Stage 1) */}
           {app.stage1_analysis && (
-            <div className="rounded-md border border-ink/10 bg-paper p-3 text-sm space-y-2">
-              <p className="font-semibold text-moss">AI Analysis</p>
-              <p className="text-ink/70">
-                <strong>One-line pitch:</strong>{" "}
-                {app.stage1_analysis.one_line_pitch}
-              </p>
+            <div className="rounded-md border border-ink/10 bg-paper p-3 text-sm space-y-3">
+              <div className="flex items-center gap-4">
+                <ScoreCircle score={app.stage1_analysis.match_score} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-moss mb-1">AI Analysis</p>
+                  <p className="text-ink/70 italic text-xs leading-relaxed">
+                    "{app.stage1_analysis.one_line_pitch}"
+                  </p>
+                </div>
+              </div>
               {app.stage1_analysis.missing_keywords.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-ink/50 mb-1">Missing keywords</p>
                   <div className="flex flex-wrap gap-1">
                     {app.stage1_analysis.missing_keywords.map((kw) => (
-                      <span
-                        key={kw}
-                        className="rounded bg-amber/15 px-1.5 py-0.5 text-xs text-amber"
-                      >
+                      <span key={kw} className="rounded-full bg-amber/15 px-2 py-0.5 text-xs text-amber">
                         {kw}
                       </span>
                     ))}
@@ -302,10 +560,7 @@ function ApplicationRow({ app, onStatusChange }: {
                   <p className="text-xs font-medium text-ink/50 mb-1">Matched skills</p>
                   <div className="flex flex-wrap gap-1">
                     {app.stage1_analysis.matched_skills.map((s) => (
-                      <span
-                        key={s}
-                        className="rounded bg-fern/15 px-1.5 py-0.5 text-xs text-fern"
-                      >
+                      <span key={s} className="rounded-full bg-fern/15 px-2 py-0.5 text-xs text-fern">
                         {s}
                       </span>
                     ))}
@@ -378,7 +633,6 @@ export default function Tracker() {
     if (!isSupabaseConfigured) { setLoading(false); return; }
     fetchAll();
 
-    // Realtime — update rows in-place as the worker processes them
     const channel = supabase
       .channel("tracker-changes")
       .on(
@@ -399,14 +653,8 @@ export default function Tracker() {
   async function fetchAll() {
     setLoading(true);
     const [appsRes, resumesRes] = await Promise.all([
-      supabase
-        .from("job_applications")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("resumes")
-        .select("*")
-        .order("created_at", { ascending: false }),
+      supabase.from("job_applications").select("*").order("created_at", { ascending: false }),
+      supabase.from("resumes").select("*").order("created_at", { ascending: false }),
     ]);
     setApps((appsRes.data as JobApplication[]) ?? []);
     setResumes((resumesRes.data as Resume[]) ?? []);
@@ -450,22 +698,23 @@ export default function Tracker() {
         </div>
       )}
 
+      {/* Quick Skills Check — instant gap analysis without file uploads */}
+      <QuickSkillsPanel />
+
       {/* Pipeline summary */}
       {apps.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {(["to_apply", "applied", "interview", "offer"] as ApplicationStatus[]).map(
-            (s) => (
-              <div
-                key={s}
-                className={`rounded-lg border border-ink/10 p-3 text-center ${STATUS_CONFIG[s].bg}`}
-              >
-                <p className={`text-2xl font-bold ${STATUS_CONFIG[s].color}`}>
-                  {counts[s]}
-                </p>
-                <p className="text-xs text-ink/50">{STATUS_CONFIG[s].label}</p>
-              </div>
-            )
-          )}
+          {(["to_apply", "applied", "interview", "offer"] as ApplicationStatus[]).map((s) => (
+            <div
+              key={s}
+              className={`rounded-lg border border-ink/10 p-3 text-center ${STATUS_CONFIG[s].bg}`}
+            >
+              <p className={`text-2xl font-bold ${STATUS_CONFIG[s].color}`}>
+                {counts[s]}
+              </p>
+              <p className="text-xs text-ink/50">{STATUS_CONFIG[s].label}</p>
+            </div>
+          ))}
         </div>
       )}
 
@@ -477,18 +726,12 @@ export default function Tracker() {
         <div className="flex flex-col items-center justify-center py-20 text-center text-ink/40">
           <Briefcase size={40} className="mb-3" />
           <p className="text-lg">No applications yet.</p>
-          <p className="mt-1 text-sm">
-            Add your first application to start tracking.
-          </p>
+          <p className="mt-1 text-sm">Add your first application to start tracking.</p>
         </div>
       ) : (
         <ul className="space-y-3">
           {apps.map((app) => (
-            <ApplicationRow
-              key={app.id}
-              app={app}
-              onStatusChange={updateStatus}
-            />
+            <ApplicationRow key={app.id} app={app} onStatusChange={updateStatus} />
           ))}
         </ul>
       )}
