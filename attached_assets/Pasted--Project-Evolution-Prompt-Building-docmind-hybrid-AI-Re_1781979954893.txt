@@ -1,0 +1,63 @@
+# 🚀 Project Evolution Prompt: Building `docmind-hybrid` (AI Resume Tailoring & Job Tracker)
+
+## 1. Context & Current State
+I am building a hybrid cloud/local AI application named **`docmind-hybrid`** (Repo: `SuryaKumar6599/docmind-hybrid`). 
+It combines a cloud-hosted frontend/database with a local, privacy-first AI engine.
+
+**Current Architecture:**
+*   **Frontend:** Next.js hosted on **Vercel** (Free tier).
+*   **Database:** **Supabase** (PostgreSQL + `pgvector` for relational tracking and vector search).
+*   **AI Engine:** Local Python FastAPI backend running on Apple Silicon, using **Ollama** (`qwen2.5:7b` for text, `qwen2.5vl:7b` for vision). Exposed to Vercel via a secure tunnel.
+*   **Core Parsing:** Microsoft `markitdown` to convert PDF/DOCX/PPTX to Markdown to save LLM tokens.
+*   **Guardrails:** `instructor` + `pydantic` to force the LLM to output strictly validated, structured JSON.
+
+## 2. The Objective
+Evolve the tool from a generic document RAG engine into a **Personalized AI Resume Tailoring & Job Application Tracker**. 
+The workflow involves uploading a base resume, feeding it Job Descriptions (JDs), using AI to extract matching skills and recommend projects, generating a tailored resume, and tracking the application status. The actual job application is done manually by the user to avoid bot-detection.
+
+## 3. Constraints
+*   **Hybrid Free Tier:** Maximize Vercel and Supabase free tiers; use local Ollama for zero-cost AI compute.
+*   **Token Efficiency:** Convert documents to Markdown to minimize token usage. Implement prompt tokenization to ensure Resume + JD fits within the LLM's context window.
+*   **Manual Application:** The tool assists in preparation, tailoring, and tracking, but the user manually clicks "Apply" on external portals.
+
+## 4. Required Features & Tasks
+
+### Task A: Resume Ingestion & Guardrailed Structured Extraction
+*   **Goal:** Allow users to upload their base resume (PDF or DOCX).
+*   **Requirement:** 
+    1. Use `markitdown` to convert the file to clean Markdown.
+    2. Use Guardrails (`instructor`) and strict System Prompts to force the LLM to parse the Markdown into a strict JSON schema (Contact Info, Skills, Experience, Projects, Education).
+    3. Store this structured profile in Supabase for quick retrieval.
+
+### Task B: JD Comparison, Skill Extraction & Project Recommendation
+*   **Goal:** Analyze a Job Description against the user's base resume.
+*   **Requirement:** 
+    1. Ingest the JD (PDF/DOCX/Text) and convert to Markdown.
+    2. Use the LLM to extract **Key Required Skills** from the JD.
+    3. Compare JD skills against the resume's skills to calculate a Match Score.
+    4. **Project Recommendation:** Ask the LLM to recommend which specific personal projects from the resume best align with the JD's requirements.
+
+### Task C: Prompt Tokenization & Context Management
+*   **Goal:** Prevent context window overflow and optimize LLM performance.
+*   **Requirement:** 
+    1. Implement a tokenization step (using a local tokenizer like `tiktoken` or Ollama's native token counting) before sending data to the LLM.
+    2. If the combined tokens of (Resume Markdown + JD Markdown) exceed the model's limit, intelligently truncate or summarize older experience bullets before passing them to the LLM.
+
+### Task D: Resume Tailoring & Document Generation (Downloadable)
+*   **Goal:** Generate an updated, tailored resume based on the JD match and allow the user to download it.
+*   **Requirement:** 
+    1. Prompt the LLM to rewrite the resume summary and reorder/highlight bullet points to match the JD.
+    2. **Document Generation:** Convert the tailored Markdown back into downloadable **DOCX** and **PDF** formats. *(Note: Use a library like `python-docx` to populate a pre-designed DOCX template, and a tool like `pandoc` or `weasyprint` to generate the PDF).*
+
+### Task E: Job Application Tracker (Supabase Integration)
+*   **Goal:** Track the status of all job applications in a centralized dashboard.
+*   **Requirement:** 
+    1. Create a Supabase table `job_applications` with fields: `company_name`, `role`, `jd_url`, `match_score`, `status` (To Apply, Applied, Interview, Rejected), `application_date`, and `tailored_resume_url`.
+    2. Build a Next.js dashboard on Vercel to view, filter, and manually update the status of these applications.
+
+## 5. Output Format Requested
+For each task, please provide:
+1.  The exact `pip install` / `npm install` commands needed.
+2.  The updated Python/TypeScript code (specifying which existing files to modify and which new files to create).
+3.  The SQL schema for any new Supabase tables.
+4.  A brief explanation of how it integrates with the hybrid Vercel/Supabase/Local architecture.
