@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+python-multipart
+requests
+supabase
+openai
+markitdown[all]
+pydantic
+python-dotenv
+pytest
+httpx
