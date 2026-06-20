@@ -47,3 +47,16 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Secret-containing files — never commit
+backend/.env
+backend/.env.*
+!backend/.env.example
+artifacts/docmind/.env
+artifacts/docmind/.env.local
+artifacts/docmind/.env.*.local
+.env
+.env.local
+.env.*.local
+supabase/SETUP.md
+claude.md
