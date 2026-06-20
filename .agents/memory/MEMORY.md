@@ -1,0 +1,1 @@
+- [DocMind Phase 2 architecture](docmind-phase2.md) — async worker pattern, 3-stage pipeline, instructor schemas; rules documented in claude.md at repo root.

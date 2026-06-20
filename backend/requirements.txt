@@ -1,0 +1,20 @@
+fastapi
+uvicorn[standard]
+python-multipart
+requests
+supabase
+openai
+markitdown[all]
+pydantic>=2.0
+pydantic-settings
+python-dotenv
+instructor>=1.0
+tiktoken
+python-docx
+# Optional — install for PDF export (choose one):
+# pandoc is installed via system package manager: brew install pandoc / apt install pandoc
+# weasyprint  # pip install weasyprint mammoth
+# Optional — install for token compression:
+# llmlingua   # pip install llmlingua
+pytest
+httpx
