@@ -1,20 +1,53 @@
-fastapi
-uvicorn[standard]
-python-multipart
-requests
-supabase
-openai
-markitdown[all]
-pydantic>=2.0
-pydantic-settings
-python-dotenv
-instructor>=1.0
-tiktoken
-python-docx
-# Optional — install for PDF export (choose one):
-# pandoc is installed via system package manager: brew install pandoc / apt install pandoc
-# weasyprint  # pip install weasyprint mammoth
-# Optional — install for token compression:
-# llmlingua   # pip install llmlingua
-pytest
-httpx
+# ============================================================
+# DocMind Backend — Python dependencies
+# Install: pip install -r requirements.txt
+# Tested on Python 3.11+ (Apple Silicon M4 + Linux x86_64)
+# ============================================================
+
+# --- Web framework ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# --- Supabase (DB + Storage + Realtime) ---
+supabase>=2.5.0
+
+# --- LLM client (Ollama via OpenAI-compatible API) ---
+openai>=1.40.0
+requests>=2.32.0
+
+# --- Structured LLM output — forces valid JSON via Pydantic (REQUIRED) ---
+instructor>=1.3.0
+
+# --- Pydantic v2 (schemas, settings, validation) ---
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# --- Document conversion (PDF, DOCX, PPTX, images → Markdown) ---
+markitdown[all]>=0.0.1
+
+# --- Token counting (enforce 8k context budget) ---
+tiktoken>=0.7.0
+
+# --- DOCX generation (Stage 3 — no LLM) ---
+python-docx>=1.1.0
+
+# --- Environment variables ---
+python-dotenv>=1.0.0
+
+# --- Testing ---
+pytest>=8.0.0
+httpx>=0.27.0
+
+# ============================================================
+# Optional — PDF export (Stage 3)
+# pandoc must be installed via OS package manager, NOT pip:
+#   macOS:  brew install pandoc
+#   Ubuntu: sudo apt install pandoc
+# ============================================================
+
+# ============================================================
+# Optional — Token compression (auto-used when JD/resume > budget)
+# Uncomment to enable LLMLingua:
+# llmlingua>=0.2.0
+# ============================================================
