@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "python-3.11"]
 
 [deployment]
 router = "application"
@@ -26,3 +26,6 @@ externalPort = 80
 [userenv]
 
 [userenv.shared]
+
+[nix]
+packages = ["python39Packages.uvicorn"]
