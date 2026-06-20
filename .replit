@@ -28,3 +28,4 @@ externalPort = 80
 [userenv.shared]
 VITE_SUPABASE_URL = "https://xsrswffyzrtctinsjpty.supabase.co"
 VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcnN3ZmZ5enJ0Y3RpbnNqcHR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MjIyMjYsImV4cCI6MjA5NjI5ODIyNn0.DpUJ0IIFu8XgXsG476kqXGr0yHSbou8BZb6gN_Z46Po"
+VITE_DOCMIND_API_URL = "https://jake-anthropology-marijuana-parking.trycloudflare.com"
