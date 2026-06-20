@@ -65,6 +65,19 @@ export interface Stage1Analysis {
   one_line_pitch: string;
 }
 
+export interface RewrittenBullet {
+  original: string;
+  rewritten: string;
+  priority: number;
+}
+
+export interface Stage2Content {
+  tailored_summary: string;
+  rewritten_bullets: RewrittenBullet[];
+  skills_to_add: string[];
+  cover_letter_opening: string;
+}
+
 export interface JobApplication {
   id: string;
   user_id: string;
@@ -77,7 +90,7 @@ export interface JobApplication {
   application_date: string | null;
   match_score: number | null;
   stage1_analysis: Stage1Analysis | null;
-  stage2_content: Record<string, unknown> | null;
+  stage2_content: Stage2Content | null;
   docx_url: string | null;
   pdf_url: string | null;
   notes: string | null;
