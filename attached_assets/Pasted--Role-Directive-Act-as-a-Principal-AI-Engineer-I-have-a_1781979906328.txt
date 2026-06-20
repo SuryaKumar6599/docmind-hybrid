@@ -1,0 +1,85 @@
+# Role & Directive
+Act as a Principal AI Engineer. I have a working generic multi-document RAG application (`docmind-hybrid`) built on Next.js (Vercel), Supabase (pgvector), and a local FastAPI + Ollama backend. 
+
+Your task is to **complete the remaining tasks (C and D) from the original DocMind-Local roadmap**, and **restore critical missing components** that were lost during the infrastructure rewrite. 
+
+**CRITICAL RULE:** Do not break the existing working Supabase/Next.js/Realtime architecture. All new code must integrate seamlessly into the existing async-worker polling pattern (because Vercel has a 10s timeout, Next.js only uploads to Supabase Storage; the local FastAPI worker polls and processes).
+
+---
+
+## 1. Context & Current Architecture
+- **Frontend:** Next.js on Vercel. Uploads files to Supabase Storage, inserts `pending_processing` rows, listens via Supabase Realtime.
+- **Database:** Supabase Postgres + `pgvector`. Uses `match_documents` RPC for cross-document semantic search.
+- **Backend:** Local FastAPI worker on Apple Silicon. Polls Supabase for `pending_processing` rows, processes them using local Ollama, updates the row status to `ready`.
+- **Current LLM Stack:** `qwen2.5:7b` for chat, `nomic-embed-text` for embeddings.
+- **Current Flaws to Fix:** 
+  - The LLM citation parsing uses a hand-rolled `_parse_json` regex fallback instead of strict grammar-constrained generation.
+  - The PDF cleaner only does generic whitespace collapsing, missing specific artifact fixes (like de-spacing letters).
+  - No vision OCR or advanced structured extraction exists.
+
+---
+
+## 2. Prerequisites: Restoring Missing Doc 1 Components
+Before implementing Tasks C and D, you must restore these foundational pieces:
+
+1. **Robust PDF Cleaner (`cleaner.py`):** 
+   - Restore the specific regex rules to fix PDF extraction artifacts. 
+   - Example: `re.sub(r'([a-z]) ([a-z])', r'\1\2', text)` to fix `Lan g ua g es` -> `Languages`.
+   - Example: Fix escaped pipes (`\|` -> `|`) and punctuation spacing.
+2. **Strict Guardrails (`instructor` + `pydantic`):**
+   - Remove the hand-rolled `_parse_json` regex fallback in `rag.py`.
+   - Wrap the Ollama OpenAI-compatible client with `instructor`.
+   - Force the RAG citation response to conform to a strict Pydantic model so the LLM literally cannot return malformed JSON or hallucinated citation IDs.
+3. **Vision OCR Integration:**
+   - Add support for `qwen2.5vl:7b` via Ollama to visually read scanned PDFs and images.
+
+---
+
+## 3. Task C: Agentic Routing & Advanced Extraction
+Implement an intelligent routing system so not every document goes through the exact same pipeline.
+
+**Requirements:**
+1. **Create `agent_router.py`:**
+   - Analyze the file extension and a 500-character text preview.
+   - Dynamically route the file to one of three pipelines:
+     - `standard_converter`: Clean DOCX/TXT/text PDFs (uses MarkItDown + robust cleaner).
+     - `vision_ocr`: Scanned PDFs, images, or files with unreadable text (uses `qwen2.5vl:7b`).
+     - `advanced_extractor`: Invoices, contracts, or forms needing strict JSON extraction.
+2. **Create `advanced_extractor.py`:**
+   - Use `instructor` + `pydantic` to force the LLM (`qwen2.5:7b`) to output a strictly validated JSON schema (e.g., extracting `document_type`, `parties`, `dates`, `amounts`, `obligations`).
+   - If the LLM fails to conform, `instructor` should automatically retry up to 3 times.
+3. **Update the FastAPI Worker:**
+   - Modify the polling loop to call the `AgentRouter` first.
+   - Route the file to the appropriate converter based on the decision.
+   - Store the routing decision and any advanced extraction JSON in the Supabase row metadata.
+
+---
+
+## 4. Task D: Local RAG Evaluation Pipeline
+Implement a zero-cost, 100% local evaluation framework to prove the RAG system's accuracy.
+
+**Requirements:**
+1. **Create `scripts/evaluate_rag.py`:**
+   - Do not use paid APIs or heavy cloud frameworks like `ragas`. Use local `qwen2.5:7b` as an "LLM-as-a-Judge".
+2. **Define Evaluation Metrics:**
+   - **Faithfulness (1-5):** Is the generated answer strictly supported by the retrieved context chunks? (Checks for hallucinations).
+   - **Answer Relevancy (1-5):** Does the answer directly address the user's question?
+   - **Citation Accuracy (Boolean/Score):** Do the cited `chunk_id`s actually exist in the retrieved context, and do the quotes match?
+3. **Test Set Format:**
+   - Define a JSONL format for the test set: `{"question": "...", "ground_truth": "...", "context": "..."}`.
+4. **Execution Flow:**
+   - The script should load the test set, query the Supabase vector store (or use provided context), generate an answer via the `LocalRAG` class, and then pass the (Question, Answer, Context, Ground Truth) to the Judge LLM to get the scores.
+   - Output a summary of average Faithfulness and Relevancy scores.
+
+---
+
+## 5. Output Format Requested
+Please provide the implementation in the following order:
+
+1. **Prerequisites Code:** The updated `cleaner.py`, the `instructor`-wrapped `rag.py` (with Pydantic citation models), and the `ollama_vision.py` wrapper.
+2. **Task C Code:** `agent_router.py`, `advanced_extractor.py` (with Pydantic schemas), and the exact code changes needed in the FastAPI worker polling loop to integrate the router.
+3. **Task D Code:** The complete `scripts/evaluate_rag.py` script, including the Judge LLM prompt templates and the JSONL test set example.
+4. **Dependency Updates:** The exact `pip install` commands needed (e.g., `instructor`, `pydantic`).
+5. **Integration Notes:** Brief instructions on how to test the new routing and evaluation locally.
+
+**Take a deep breath, ensure strict type hinting and error handling, and begin generating the code.**

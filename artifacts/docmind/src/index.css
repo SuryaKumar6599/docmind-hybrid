@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-ink: #17211d;
+  --color-moss: #315343;
+  --color-fern: #5c7f68;
+  --color-paper: #f7f4ed;
+  --color-signal: #2f6fed;
+  --color-amber: #c8812f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: #17211d;
+  background:
+    linear-gradient(180deg, rgba(247, 244, 237, 0.98), rgba(238, 242, 235, 0.95)),
+    radial-gradient(circle at top left, rgba(47, 111, 237, 0.12), transparent 28rem);
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
