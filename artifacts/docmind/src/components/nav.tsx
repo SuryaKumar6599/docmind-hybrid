@@ -1,10 +1,11 @@
 import { Link, useLocation } from "wouter";
-import { Bot, FileText, LayoutDashboard } from "lucide-react";
+import { Bot, FileCode2, FileText, LayoutDashboard } from "lucide-react";
 
 const NAV_ITEMS = [
   { to: "/", icon: Bot, label: "Search" },
   { to: "/resumes", icon: FileText, label: "Resumes" },
   { to: "/tracker", icon: LayoutDashboard, label: "Tracker" },
+  { to: "/convert", icon: FileCode2, label: "Convert" },
 ] as const;
 
 export function Nav() {

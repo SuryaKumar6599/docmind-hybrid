@@ -3,6 +3,7 @@ import { Nav } from "@/components/nav";
 import Home from "@/pages/home";
 import Resumes from "@/pages/resumes";
 import Tracker from "@/pages/tracker";
+import Convert from "@/pages/convert";
 
 function Router() {
   return (
@@ -10,6 +11,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/resumes" component={Resumes} />
       <Route path="/tracker" component={Tracker} />
+      <Route path="/convert" component={Convert} />
       <Route>
         <div className="flex min-h-screen items-center justify-center text-ink/40">
           Page not found

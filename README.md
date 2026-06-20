@@ -1,6 +1,6 @@
 # DocMind Hybrid
 
-> Private, local-first AI document search + Resume Tailoring + Job Application Tracker.  
+> Private, local-first AI document search + Markdown Generator + Resume Tailoring + Job Application Tracker.  
 > **Zero cloud LLM costs.** All inference runs on your own machine via Ollama.
 
 ---
@@ -10,25 +10,26 @@
 | Feature | Description |
 |---------|-------------|
 | **Document Search** | Upload PDFs/DOCX → ask questions → get cited answers |
-| **Resume Tailoring** | Upload your resume + a Job Description → get a tailored DOCX/PDF with missing keywords injected |
-| **Application Tracker** | Track every application's status, match score, and tailored resume download |
+| **Markdown Generator** | Convert any document (PDF/DOCX/PPTX/images…) to clean Markdown via Microsoft MarkItDown — for LLM input prep |
+| **Resume Tailoring** | Upload resume + Job Description → tailored DOCX/PDF with missing keywords injected |
+| **Application Tracker** | Track applications, see AI gap analysis, rewritten bullets, cover letter, match score |
 
 ---
 
 ## Architecture
 
 ```
-Browser (Vite + React on Replit/Vercel)
+Browser (Vite + React on Replit)
     │
     ├── Supabase (Storage + PostgreSQL + Realtime)
     │       ↕ (file uploads, DB reads, live updates)
     │
     └── Cloudflare Tunnel → Local FastAPI Worker (your Mac/PC)
                                     │
-                                    ├── MarkItDown  (PDF/DOCX → Markdown)
+                                    ├── MarkItDown  (PDF/DOCX/PPTX/images → Markdown)
                                     ├── LLMLingua   (token compression, optional)
                                     ├── Ollama qwen2.5:7b  (chat + skill extraction)
-                                    ├── Ollama qwen2.5vl:7b (vision OCR)
+                                    ├── Ollama qwen2.5vl:7b (vision OCR for images)
                                     └── nomic-embed-text   (vector embeddings)
 ```
 
@@ -36,13 +37,14 @@ Browser (Vite + React on Replit/Vercel)
 
 ```
 Upload JD → Supabase Storage → DB row (pending_processing)
-                                    ↓ worker polls every 10s
+                                    ↓ worker polls every 10 s
 Stage 1 [Analytical]   MarkItDown converts JD + Resume → Markdown
                         Qwen2.5:7b → JobMatchAnalysis JSON
-                        (missing_keywords, matched_skills, match_score)
+                        (missing_keywords, matched_skills, match_score, one_line_pitch)
                                     ↓
-Stage 2 [Creative]     Qwen2.5:7b rewrites summary + bullets
+Stage 2 [Creative]     Qwen2.5:7b rewrites summary + bullets → TailoredContent JSON
                         "Lost in the Middle": keywords at TOP, highlights at BOTTOM
+                        (tailored_summary, rewritten_bullets, skills_to_add, cover_letter_opening)
                                     ↓
 Stage 3 [Structural]   python-docx → .docx + pandoc → .pdf  (NO LLM)
                         Upload to Supabase tailored-resumes bucket
@@ -61,7 +63,7 @@ Supabase Realtime → Browser shows download links instantly
 | Python 3.11+ | Local backend | [python.org](https://python.org) |
 | Ollama | Local LLM runtime | [ollama.com](https://ollama.com) |
 | pandoc *(optional)* | PDF export | `brew install pandoc` |
-| cloudflared | Tunnel to expose local backend | [cloudflare.com/products/tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) |
+| cloudflared | Expose local backend | [cloudflare.com](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) |
 
 ---
 
@@ -74,7 +76,7 @@ git clone https://github.com/SuryaKumar6599/docmind-hybrid.git
 cd docmind-hybrid
 ```
 
-### 2. Pull Ollama models (required)
+### 2. Pull Ollama models
 
 ```bash
 ollama pull qwen2.5:7b
@@ -85,12 +87,12 @@ ollama pull nomic-embed-text
 ### 3. Set up Supabase
 
 1. Create a free project at [supabase.com](https://supabase.com)
-2. Go to **SQL Editor → New query**, paste the contents of [`supabase/run_this_in_supabase.sql`](supabase/run_this_in_supabase.sql) and click **Run**
-3. Go to **Storage → New bucket**, create three **private** buckets:
+2. **SQL Editor → New query** — paste `supabase/run_this_in_supabase.sql` and click **Run**
+3. **Storage → New bucket** — create three **private** buckets:
    - `resumes`
    - `job-descriptions`
    - `tailored-resumes`
-4. In SQL Editor run the storage policies from [`supabase/SETUP.md`](supabase/SETUP.md)
+4. In SQL Editor, run the storage policies from `supabase/SETUP.md`
 
 ### 4. Configure the backend
 
@@ -108,10 +110,10 @@ OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_CHAT_MODEL=qwen2.5:7b
 OLLAMA_VISION_MODEL=qwen2.5vl:7b
 OLLAMA_EMBED_MODEL=nomic-embed-text
-DOCMIND_CORS_ORIGINS=http://localhost:3000,https://*.replit.dev,https://your-app.vercel.app
+DOCMIND_CORS_ORIGINS=http://localhost:3000,https://*.replit.dev,https://your-app.replit.app
 ```
 
-### 5. Start the backend
+### 5. Start the backend (your Mac — 3 terminals)
 
 ```bash
 # Terminal 1 — FastAPI server
@@ -122,89 +124,139 @@ uvicorn app.main:app --reload --port 8000
 # Terminal 2 — Polling worker (processes resume tailoring jobs)
 cd backend
 python -m app.worker
-```
 
-### 6. Expose via Cloudflare Tunnel
-
-```bash
-# Terminal 3
+# Terminal 3 — Cloudflare Tunnel
 cloudflared tunnel --url http://localhost:8000
-# Copy the https://xxxx.trycloudflare.com URL
+# Copy the https://xxxx.trycloudflare.com URL — you'll need it in step 7
 ```
 
-### 7. Configure the frontend
+### 6. Configure the frontend (Replit Secrets)
 
-```bash
-cd artifacts/docmind
-cp .env.example .env.local   # or create it manually
-```
+In Replit, go to **Secrets** and add:
 
-Edit `artifacts/docmind/.env.local`:
+| Secret | Value |
+|--------|-------|
+| `VITE_SUPABASE_URL` | `https://your-project.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (Settings → API → anon public) |
+| `VITE_DOCMIND_API_URL` | `https://xxxx.trycloudflare.com` |
 
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key              # Settings → API → anon (public)
-VITE_DOCMIND_API_URL=https://xxxx.trycloudflare.com
-```
+> For local development, create `artifacts/docmind/.env.local` with the same three keys instead.
 
-### 8. Start the frontend
+### 7. Start the frontend
+
+Replit starts this automatically. To run locally:
 
 ```bash
 pnpm install
 pnpm --filter @workspace/docmind run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173)
+Open the preview pane in Replit, or [http://localhost:5173](http://localhost:5173) locally.
 
 ---
 
-## Deploying the frontend
+## Deploying to production (Replit)
 
-### Option A — Replit (recommended)
+1. Set the three `VITE_*` secrets in **Replit Secrets** (already done above)
+2. Click **Deploy** in the Replit header
+3. Your app is live at `https://your-app.replit.app`
+4. The local FastAPI worker must keep running on your Mac with Cloudflare Tunnel open — the deployed frontend calls it via `VITE_DOCMIND_API_URL`
 
-The frontend is already configured as a Replit artifact. Set the three `VITE_*` env vars in **Replit Secrets** and deploy via **Replit Deployments**.
-
-### Option B — Vercel
+### Optional: Vercel
 
 ```bash
 cd artifacts/docmind
 vercel deploy
 ```
 
-Set environment variables in Vercel dashboard:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-- `VITE_DOCMIND_API_URL`
-
-> **Important:** The local FastAPI worker must always be running on your machine and exposed via Cloudflare Tunnel. The frontend is stateless — all AI processing happens locally.
+Set the three `VITE_*` environment variables in the Vercel dashboard.
 
 ---
 
-## Usage
+## Git workflow
 
-### Search tab
-1. Click **Choose File** → pick any PDF, DOCX, PPTX, or image
-2. Click **Index Document** — the backend converts it with MarkItDown and stores embeddings
-3. Ask any question in the chat box → get cited answers from your documents
+### First-time setup
 
-### Resumes tab
-1. Upload your base resume (PDF or DOCX)
-2. Wait for status to show **Ready** (the worker processed it with MarkItDown + nomic-embed-text)
+```bash
+# Connect to GitHub from Replit: Account → Connected services → GitHub
+git remote set-url origin https://github.com/SuryaKumar6599/docmind-hybrid.git
+```
 
-### Tracker tab
-1. Click **Add Application**
-2. Select your resume, enter company + role
-3. Upload the Job Description file (PDF/DOCX/TXT) — this triggers the AI pipeline
-4. Watch the status update live: Queued → Processing → Analysed → Ready
-5. Expand the row to see:
-   - Match score (0–100)
-   - Missing keywords to add to your resume
-   - Your strongest matching skills
-   - **Download tailored DOCX / PDF**
+### Commit and push changes
+
+```bash
+# Stage all changes
+git add -A
+
+# Commit with a descriptive message
+git commit -m "feat: add Markdown Generator + enhanced tracker + resumes drag-drop"
+
+# Push to main
+git push origin main
+```
+
+### Common git commands
+
+```bash
+git --no-optional-locks status        # see what changed
+git log --oneline -10                 # recent commits
+git diff HEAD~1 HEAD --stat           # what changed in last commit
+git stash                             # temporarily hide uncommitted changes
+git stash pop                         # restore stashed changes
+```
+
+> **Note:** Destructive git operations (reset, rebase, force-push) must be run from the Replit **Shell** tab — the agent sandbox blocks them for safety.
 
 ---
 
-## Token Optimization Stack
+## Usage guide
+
+### Search tab (`/`)
+1. Drag & drop or click to upload any PDF, DOCX, PPTX, HTML, or image
+2. Click **Index Document** — backend converts it with MarkItDown and stores embeddings
+3. Ask any question in the chat → get cited answers
+4. Use quick-question chips for common queries
+5. **Clear chat** button resets the conversation
+
+### Markdown Generator tab (`/convert`)
+1. Drag & drop or click to upload any supported file
+2. Click **Convert to Markdown**
+3. See the clean Markdown output with stats:
+   - Character count, word count, **estimated token count** (colour-coded vs 8k budget)
+4. **Copy** to clipboard or **Download as .md** file
+5. Paste into any LLM prompt — clean, structured, no garbage characters
+
+**Supported formats:** PDF · DOCX · PPTX · XLSX · HTML · TXT · CSV · JSON · XML · PNG/JPG/GIF/BMP (vision OCR)
+
+### Resumes tab (`/resumes`)
+1. Drag & drop or click to upload a PDF or DOCX resume
+2. Wait for status: Queued → Processing → **Ready**
+3. Expand a ready resume to **preview the extracted Markdown** and copy it
+4. Delete resumes you no longer need with the trash icon
+
+### Tracker tab (`/tracker`)
+1. **Quick Skills Check** — paste resume text + JD text → instant gap analysis (no file upload needed)
+   - Missing keywords (copy all at once)
+   - Matched skills
+   - AI match score (0–100)
+   - One-line pitch
+   - Skills you can honestly claim
+   - **Track this application** — saves analysis to tracker with match score pre-filled
+2. **Add Application** — select resume, enter company + role, optionally upload JD file
+   - Triggers full 3-stage pipeline automatically
+   - Duplicate detection warns you before saving
+   - Keyboard: `Esc` to cancel, `⌘↵` / `Ctrl+Enter` to save
+3. **Expand any row** to see:
+   - **AI Analysis tab** — match score, missing keywords, strengths
+   - **Tailored Content tab** — cover letter opening, tailored summary, rewritten bullets diff (original vs rewritten side-by-side), skills to add
+   - **Notes tab** — inline editable notes, saved to Supabase
+4. **Filter / search** by company, role, or status
+5. **Export CSV** — downloads all applications as a spreadsheet
+6. Status cards (To Apply / Applied / Interview / Offer) are clickable filters
+
+---
+
+## Token optimisation stack
 
 | Tool | Role |
 |------|------|
@@ -217,8 +269,8 @@ Set environment variables in Vercel dashboard:
 ```
 System prompt  800 tokens  (fixed)
 JSON schema   1200 tokens  (fixed)
-JD text       3000 tokens  (hard cap — compressed if over)
-Resume text   3000 tokens  (remainder — compressed if over)
+JD text       3000 tokens  (hard cap — LLMLingua compresses if over)
+Resume text   3000 tokens  (remainder — LLMLingua compresses if over)
 ```
 
 ---
@@ -229,16 +281,19 @@ Resume text   3000 tokens  (remainder — compressed if over)
 .
 ├── artifacts/docmind/          # Vite + React frontend
 │   └── src/
-│       ├── App.tsx             # Routing (/, /resumes, /tracker)
-│       ├── lib/supabase.ts     # Typed Supabase browser client
+│       ├── App.tsx             # Routing (/, /resumes, /tracker, /convert)
+│       ├── lib/supabase.ts     # Typed Supabase client + all TS interfaces
 │       ├── pages/
-│       │   ├── home.tsx        # RAG chat (Search tab)
-│       │   ├── resumes.tsx     # Resume upload + Realtime status
-│       │   └── tracker.tsx     # Application tracker dashboard
-│       └── components/nav.tsx  # Navigation bar
-├── backend/                    # Local FastAPI worker
+│       │   ├── home.tsx        # RAG chat — doc upload, indexed-doc history
+│       │   ├── resumes.tsx     # Resume upload, drag-drop, markdown preview, delete
+│       │   ├── tracker.tsx     # Full tracker: Quick Skills Check, app rows, CSV export
+│       │   └── convert.tsx     # Markdown Generator (MarkItDown standalone)
+│       └── components/nav.tsx  # Navigation bar (Search / Resumes / Tracker / Convert)
+├── backend/                    # Local FastAPI worker (runs on your Mac)
 │   └── app/
+│       ├── api.py              # Routes: /health /index /ask /extract-skills /convert
 │       ├── worker.py           # Polling loop — resume ingestion + 3-stage pipeline
+│       ├── document_processing.py  # MarkItDown wrapper + chunker
 │       ├── schemas.py          # Pydantic models (instructor-enforced)
 │       ├── prompts.py          # Stage 1 & 2 prompt templates
 │       ├── context_manager.py  # Token budget allocator + LLMLingua
@@ -246,24 +301,34 @@ Resume text   3000 tokens  (remainder — compressed if over)
 │       ├── rag.py              # RAG answer with instructor
 │       ├── cleaner.py          # PDF text artifact fixer
 │       └── ollama.py           # OllamaClient (chat + vision OCR)
-│   └── scripts/
-│       └── evaluate_rag.py     # Local LLM-as-Judge evaluation
 ├── supabase/
 │   ├── run_this_in_supabase.sql  # Full DB schema (run once)
-│   └── SETUP.md                  # Step-by-step setup guide
-└── claude.md                   # AI agent context guide
+│   └── SETUP.md                  # Step-by-step Supabase setup guide
+└── README.md                     # This file
 ```
+
+---
+
+## API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check — returns `{status: "ok"}` |
+| `POST` | `/index` | Upload + index a document (multipart `file`) |
+| `POST` | `/ask` | RAG query — `{question, match_count}` → `{answer, citations}` |
+| `POST` | `/extract-skills` | Skills gap analysis — `{resume_text, jd_text}` → `JobMatchAnalysis` |
+| `POST` | `/convert` | MarkItDown conversion — multipart `file` → `{markdown, char_count, word_count, estimated_tokens}` |
 
 ---
 
 ## Environment variables reference
 
-### Frontend (`artifacts/docmind/.env.local`)
+### Frontend (`artifacts/docmind/.env.local` or Replit Secrets)
 
 | Variable | Description |
 |----------|-------------|
 | `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (safe for browser) |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (safe for browser, RLS enforces access) |
 | `VITE_DOCMIND_API_URL` | Cloudflare tunnel URL to local FastAPI |
 
 ### Backend (`backend/.env`)
@@ -271,7 +336,7 @@ Resume text   3000 tokens  (remainder — compressed if over)
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SUPABASE_URL` | — | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | — | Service role key (keep secret) |
+| `SUPABASE_SERVICE_ROLE_KEY` | — | Service role key (keep secret — never expose to browser) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
 | `OLLAMA_CHAT_MODEL` | `qwen2.5:7b` | Chat + extraction model |
 | `OLLAMA_VISION_MODEL` | `qwen2.5vl:7b` | Vision OCR model |
@@ -279,6 +344,19 @@ Resume text   3000 tokens  (remainder — compressed if over)
 | `DOCMIND_CORS_ORIGINS` | `http://localhost:3000` | Comma-separated allowed origins |
 | `TOKEN_BUDGET_TOTAL` | `8000` | Total token budget |
 | `WORKER_POLL_INTERVAL` | `10` | Seconds between Supabase polls |
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Amber dot on Search / Convert / Tracker | Set `VITE_DOCMIND_API_URL` in Replit Secrets |
+| "Local backend unreachable" banner | Start FastAPI (`uvicorn app.main:app`) + Cloudflare Tunnel on your Mac |
+| Resume stuck at "Queued" | Start the worker: `cd backend && python -m app.worker` |
+| PDF conversion garbled | MarkItDown uses vision OCR for scanned PDFs — ensure `qwen2.5vl:7b` is pulled |
+| Token count > 8k in Markdown Generator | LLMLingua will compress it automatically in the pipeline; for manual use, chunk the output |
+| Git push blocked in agent | Run git commands from the Replit **Shell** tab |
 
 ---
 

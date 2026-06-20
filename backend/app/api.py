@@ -175,3 +175,45 @@ async def extract_skills(
             status_code=500,
             detail=f"Skills extraction failed: {exc}",
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Markdown conversion — Microsoft MarkItDown on any document
+# ---------------------------------------------------------------------------
+
+class ConvertResponse(BaseModel):
+    filename: str
+    markdown: str
+    char_count: int
+    word_count: int
+    estimated_tokens: int
+
+
+@router.post("/convert", response_model=ConvertResponse)
+async def convert_document(file: UploadFile = File(...)) -> ConvertResponse:
+    """
+    Convert any document (PDF, DOCX, PPTX, Excel, HTML, images, TXT…) to clean Markdown.
+    Uses Microsoft MarkItDown. Returns markdown text + stats for token budget planning.
+
+    Supported formats: PDF, DOCX, PPTX, XLSX, HTML, TXT, MD, CSV, JSON, XML,
+                       PNG, JPG, GIF, BMP, TIFF, WebP (via vision OCR)
+    """
+    filename = file.filename or "document"
+    suffix = Path(filename).suffix
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await file.read())
+        tmp_path = Path(tmp.name)
+    try:
+        processor = DocumentProcessor()
+        markdown = processor.convert_to_markdown(tmp_path)
+        return ConvertResponse(
+            filename=filename,
+            markdown=markdown,
+            char_count=len(markdown),
+            word_count=len(markdown.split()),
+            estimated_tokens=len(markdown) // 4,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        tmp_path.unlink(missing_ok=True)

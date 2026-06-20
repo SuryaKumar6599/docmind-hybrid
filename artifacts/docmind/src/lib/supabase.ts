@@ -47,6 +47,7 @@ export interface Resume {
   status: ResumeStatus;
   document_id: string | null;
   chunk_count: number | null;
+  markdown_content: string | null;
   error_message: string | null;
   created_at: string;
   updated_at: string;
