@@ -163,13 +163,15 @@ export default function Convert() {
 
           {/* How to use */}
           <div className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">
-            <p className="mb-2 text-sm font-semibold text-ink">How to use</p>
-            <ol className="space-y-1.5 text-xs text-ink/60 list-decimal list-inside">
-              <li>Upload any document</li>
-              <li>Click Convert</li>
-              <li>Copy or download the Markdown</li>
-              <li>Paste into your LLM prompt</li>
-            </ol>
+            <p className="mb-2 text-sm font-semibold text-ink">MarkItDown Features</p>
+            <ul className="space-y-1.5 text-xs text-ink/60 list-disc list-inside">
+              <li>Converts Office docs & PDF to clean Markdown</li>
+              <li>Extracts EXIF metadata from media</li>
+              <li>Runs Vision OCR on images</li>
+              <li>Transcribes audio files</li>
+              <li>Parses tabular data (CSV/JSON/XML)</li>
+              <li>Iterates recursively through ZIP archives</li>
+            </ul>
           </div>
         </div>
 

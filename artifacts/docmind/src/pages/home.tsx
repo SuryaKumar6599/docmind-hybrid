@@ -96,7 +96,7 @@ export default function Home() {
       const response = await fetch(`${API_URL}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed, match_count: 5 }),
+        body: JSON.stringify({ question: trimmed, match_count: 5, category: "general" }),
       });
       if (!response.ok) throw new Error(await response.text());
       const data = await response.json();
