@@ -60,3 +60,16 @@ artifacts/docmind/.env.*.local
 .env.*.local
 supabase/SETUP.md
 claude.md
+
+# Python
+__pycache__/
+*.pyc
+
+# Next.js
+.next/
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*
