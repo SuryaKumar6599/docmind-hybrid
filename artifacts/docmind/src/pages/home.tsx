@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Bot,
@@ -13,6 +13,7 @@ import {
   User,
   Zap,
 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -31,6 +32,8 @@ type IndexedDoc = {
   chunks: number;
   tokens: number;
   time: string;
+  status: "pending_processing" | "processing" | "ready" | "error";
+  id: string;
 };
 
 const API_URL =
@@ -58,24 +61,81 @@ export default function Home() {
     if (dropped) setFile(dropped);
   }
 
+  useEffect(() => {
+    // Listen for status updates on documents we are tracking
+    const channel = supabase
+      .channel("search-documents-updates")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "documents" },
+        (payload) => {
+          const docId = payload.new.id;
+          const newStatus = payload.new.status;
+          
+          setIndexedDocs((prev) => {
+            const exists = prev.some(d => d.id === docId);
+            if (!exists) return prev;
+            
+            if (newStatus === "ready") {
+              setStatus({ text: `Indexed "${payload.new.name}"`, type: "ok" });
+            } else if (newStatus === "error") {
+              setStatus({ text: `Failed to index "${payload.new.name}"`, type: "error" });
+            }
+            
+            const chunks = payload.new.chunk_count || 0;
+            const tokens = Math.round(chunks * 200);
+
+            return prev.map(d => 
+              d.id === docId ? { ...d, status: newStatus, chunks: chunks || d.chunks, tokens: tokens || d.tokens } : d
+            );
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   async function uploadDocument() {
-    if (!file || !API_URL) return;
+    if (!file) return;
     setIsUploading(true);
-    setStatus({ text: "Indexing…", type: "working" });
+    setStatus({ text: "Uploading to storage…", type: "working" });
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const response = await fetch(`${API_URL}/index`, { method: "POST", body: form });
-      if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
-      const chunks = data.chunks || 0;
-      // Use real chunk count × avg tokens per chunk for accurate estimate
-      const tokens = Math.round(chunks * 200);
+      const docId = crypto.randomUUID();
+      // Remove spaces from filename for storage
+      const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      const storagePath = `public/${docId}-${safeName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from("search-documents")
+        .upload(storagePath, file);
+        
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase.from("documents").insert({
+        id: docId,
+        name: file.name,
+        category: "general",
+        storage_path: storagePath,
+        status: "pending_processing",
+      });
+      
+      if (dbError) throw dbError;
+
       setIndexedDocs((prev) => [
-        { name: data.document_name || file.name, chunks, tokens, time: new Date().toLocaleTimeString() },
+        { 
+          id: docId,
+          name: file.name, 
+          chunks: 0, 
+          tokens: 0, 
+          time: new Date().toLocaleTimeString(),
+          status: "pending_processing"
+        },
         ...prev,
       ]);
-      setStatus({ text: `Indexed "${data.document_name || file.name}" (${chunks} chunks)`, type: "ok" });
+      setStatus({ text: `Queued "${file.name}" for indexing`, type: "ok" });
       setFile(null);
       if (fileInput.current) fileInput.current.value = "";
     } catch (error) {
@@ -100,13 +160,51 @@ export default function Home() {
         body: JSON.stringify({ question: trimmed, match_count: 5, category: "general" }),
       });
       if (!response.ok) throw new Error(await response.text());
-      const data = await response.json();
+      if (!response.body) throw new Error("No response body");
+
       setMessages((cur) => [
         ...cur,
-        { role: "assistant", content: data.answer || "I do not know.", citations: data.citations || [] },
+        { role: "assistant", content: "", citations: [] },
       ]);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let answer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+        
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            if (data.type === "token") {
+              answer += data.text;
+              setMessages((cur) => {
+                const newMsgs = [...cur];
+                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: answer };
+                return newMsgs;
+              });
+              // Keep scrolling down as it streams
+              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            } else if (data.type === "citations") {
+              setMessages((cur) => {
+                const newMsgs = [...cur];
+                newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], citations: data.data };
+                return newMsgs;
+              });
+              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }
+          } catch (e) {
+            console.error("Error parsing JSON line:", line, e);
+          }
+        }
+      }
       setStatus({ text: "Ready", type: "idle" });
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (error) {
       setStatus({ text: error instanceof Error ? error.message : "Search failed", type: "error" });
     } finally {
@@ -181,10 +279,10 @@ export default function Home() {
               className="hidden" />
 
             <button type="button" onClick={uploadDocument}
-              disabled={!file || isUploading || !apiReady}
+              disabled={!file || isUploading}
               className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-md bg-signal px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-ink/25">
               {isUploading ? <Loader2 className="animate-spin" size={17} /> : <UploadCloud size={17} />}
-              {isUploading ? "Indexing…" : "Index Document"}
+              {isUploading ? "Uploading…" : "Index Document"}
             </button>
           </section>
 
@@ -211,10 +309,14 @@ export default function Home() {
               <ul className="space-y-2">
                 {indexedDocs.map((doc, i) => (
                   <li key={i} className="rounded-md border border-ink/8 bg-paper px-3 py-2">
-                    <p className="truncate text-xs font-medium text-ink">{doc.name}</p>
-                    <div className="mt-0.5 flex gap-3 text-xs text-ink/40">
-                      <span className="flex items-center gap-0.5"><Hash size={9} /> {doc.chunks} chunks</span>
-                      <span className="flex items-center gap-0.5"><Zap size={9} /> ~{doc.tokens.toLocaleString()} tokens</span>
+                    <div className="flex items-center justify-between">
+                      <p className="truncate text-xs font-medium text-ink">{doc.name}</p>
+                      {doc.status === "pending_processing" && <span className="text-[10px] font-medium text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">Queued</span>}
+                      {doc.status === "processing" && <span className="text-[10px] font-medium text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Processing</span>}
+                      {doc.status === "ready" && <span className="text-[10px] font-medium text-fern bg-fern/10 px-1.5 py-0.5 rounded">Ready</span>}
+                      {doc.status === "error" && <span className="text-[10px] font-medium text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Error</span>}
+                    </div>
+                    <div className="mt-1 flex gap-3 text-xs text-ink/40">
                       <span className="ml-auto">{doc.time}</span>
                     </div>
                   </li>

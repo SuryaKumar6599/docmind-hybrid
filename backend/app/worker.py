@@ -131,6 +131,61 @@ def process_resume(
 
 
 # ---------------------------------------------------------------------------
+# General document ingestion pipeline
+# ---------------------------------------------------------------------------
+
+def process_document(
+    supa: Client,
+    settings: Settings,
+    row: dict[str, Any],
+) -> None:
+    """Ingest a general document into the Supabase vector store async."""
+    from .ollama import OllamaClient
+    from .supabase_store import SupabaseVectorStore
+
+    doc_id: str = row["id"]
+    storage_path: str = row["storage_path"]
+    original_name: str = row.get("name", "document")
+    category: str = row.get("category", "general")
+
+    logger.info("[DOC %s] Starting async ingestion", doc_id)
+    supa.table("documents").update({"status": "processing"}).eq("id", doc_id).execute()
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_file = Path(tmpdir) / Path(storage_path).name
+            _download_from_supabase(supa, "search-documents", storage_path, local_file)
+
+            ollama = OllamaClient(settings)
+            processor = DocumentProcessor(ollama_client=ollama)
+            raw_markdown = processor.convert_to_markdown(local_file)
+            
+            if not raw_markdown.strip():
+                raise ValueError(f"No text extracted from {original_name}")
+
+            chunks = chunk_text(raw_markdown, chunk_size=800, overlap=100)
+            embeddings = [ollama.embedding(chunk) for chunk in chunks]
+            
+            store = SupabaseVectorStore(settings)
+            metadata = processor.metadata_for(local_file, original_name)
+            store.insert_chunks(doc_id, chunks, embeddings, metadata)
+
+            supa.table("documents").update({
+                "status": "ready",
+                "chunk_count": len(chunks),
+            }).eq("id", doc_id).execute()
+
+        logger.info("[DOC %s] Ingestion complete (%d chunks)", doc_id, len(chunks))
+    except Exception as exc:
+        logger.error("[DOC %s] Ingestion failed: %s", doc_id, exc)
+        supa.table("documents").update({
+            "status": "error",
+            "error_message": str(exc),
+        }).eq("id", doc_id).execute()
+        raise
+
+
+# ---------------------------------------------------------------------------
 # Job application tailoring pipeline (3 stages)
 # ---------------------------------------------------------------------------
 
@@ -307,6 +362,20 @@ def run_polling_loop(settings: Settings) -> None:
                         "status": "error",
                         "error_message": tb[-1000:],
                     }).eq("id", row["id"]).execute()
+
+            # --- Poll search documents ---
+            pending_docs = (
+                supa.table("documents")
+                .select("*")
+                .eq("status", "pending_processing")
+                .limit(5)
+                .execute()
+            )
+            for row in pending_docs.data:
+                try:
+                    process_document(supa, settings, row)
+                except Exception:
+                    pass  # already handled in process_document
 
             # --- Poll job applications ---
             pending_apps = (

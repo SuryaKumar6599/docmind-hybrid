@@ -17,6 +17,7 @@ from pathlib import Path
 import instructor
 import requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel
 
@@ -109,79 +110,34 @@ async def root() -> dict[str, object]:
 
 
 # ---------------------------------------------------------------------------
-# Index
-# ---------------------------------------------------------------------------
-
-@router.post("/index", response_model=IndexResponse)
-async def index_document(
-    file: UploadFile = File(...),
-    store: SupabaseVectorStore = Depends(get_store),
-    ollama: OllamaClient = Depends(get_ollama),
-) -> IndexResponse:
-    """Chunk, embed, and store a document in the Supabase vector store."""
-    filename = file.filename or "document"
-    _validate_extension(filename)
-    suffix = Path(filename).suffix.lower()
-
-    logger.info("Indexing document: %s", filename)
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
-        temp.write(await file.read())
-        temp_path = Path(temp.name)
-
-    try:
-        processor = DocumentProcessor(ollama_client=ollama)
-        markdown = processor.convert_to_markdown(temp_path)
-
-        if not markdown.strip():
-            raise HTTPException(
-                status_code=422,
-                detail=f"No text could be extracted from '{filename}'. "
-                       "The file may be empty or in an unsupported format.",
-            )
-
-        chunks = chunk_text(markdown, chunk_size=800, overlap=100)
-        metadata = processor.metadata_for(temp_path, filename)
-        document_id = store.create_document(filename, metadata, category="general")
-        embeddings = [ollama.embedding(chunk) for chunk in chunks]
-        store.insert_chunks(document_id, chunks, embeddings, metadata)
-
-        logger.info("Indexed '%s': %d chunks", filename, len(chunks))
-        return IndexResponse(document_id=document_id, document_name=filename, chunks=len(chunks))
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Index failed for '%s': %s", filename, exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        temp_path.unlink(missing_ok=True)
-
-
-# ---------------------------------------------------------------------------
 # Ask / RAG
 # ---------------------------------------------------------------------------
 
-@router.post("/ask", response_model=AskResponse)
+@router.post("/ask")
 async def ask_question(
     body: AskRequest,
     store: SupabaseVectorStore = Depends(get_store),
     settings: Settings = Depends(get_settings),
     ollama: OllamaClient = Depends(get_ollama),
-) -> AskResponse:
-    """Semantic search + RAG answer over indexed documents."""
+):
+    """Semantic search + streaming RAG answer over indexed documents."""
     logger.info(
         "Ask: question=%r | category=%s | k=%d",
         body.question[:80], body.category, body.match_count,
     )
     try:
         query_embedding = ollama.embedding(body.question)
-        sources = store.match_documents(
-            query_embedding, body.match_count, category=body.category
+        sources = store.match_documents_hybrid(
+            query_text=body.question,
+            query_embedding=query_embedding,
+            match_count=body.match_count,
+            category=body.category
         )
         rag = LocalRAG(settings)
-        answer, citations = rag.answer(body.question, sources)
-        return AskResponse(answer=answer, citations=citations, sources=sources)
+        return StreamingResponse(
+            rag.answer_stream(body.question, sources),
+            media_type="application/x-ndjson"
+        )
     except Exception as exc:
         logger.error("Ask failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc

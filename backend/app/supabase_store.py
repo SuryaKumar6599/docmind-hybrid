@@ -116,3 +116,41 @@ class SupabaseVectorStore:
         ]
         logger.info("Search returned %d chunks", len(chunks))
         return chunks
+
+    def match_documents_hybrid(
+        self,
+        query_text: str,
+        query_embedding: list[float],
+        match_count: int,
+        category: str | None = None,
+    ) -> list[SourceChunk]:
+        """Semantic + Keyword search via RRF (Reciprocal Rank Fusion)."""
+        params: dict[str, Any] = {
+            "query_text": query_text,
+            "query_embedding": query_embedding,
+            "match_count": match_count,
+        }
+        if category:
+            params["filter_category"] = category
+
+        logger.debug("Hybrid search via match_documents_hybrid (k=%d)", match_count)
+        try:
+            result = self.client.rpc("match_documents_hybrid", params).execute()
+        except Exception as exc:
+            logger.warning("Hybrid RPC failed (%s) — falling back to standard semantic search", exc)
+            return self.match_documents(query_embedding, match_count, category)
+
+        chunks = [
+            SourceChunk(
+                id=str(item["id"]),
+                document_id=str(item["document_id"]),
+                document_name=str(item.get("document_name") or item["document_id"]),
+                chunk_index=int(item.get("chunk_index") or 0),
+                content=str(item["content"]),
+                metadata=item.get("metadata") or {},
+                similarity=item.get("similarity"),
+            )
+            for item in result.data
+        ]
+        logger.info("Hybrid search returned %d chunks", len(chunks))
+        return chunks

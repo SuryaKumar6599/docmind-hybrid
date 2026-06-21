@@ -82,11 +82,11 @@ class LocalRAG:
     )
 
     def __init__(self, settings: Settings) -> None:
-        raw_client = OpenAI(
+        self.raw_client = OpenAI(
             base_url=f"{settings.ollama_base_url}/v1",
             api_key="ollama",
         )
-        self.client = instructor.from_openai(raw_client, mode=instructor.Mode.JSON)
+        self.client = instructor.from_openai(self.raw_client, mode=instructor.Mode.JSON)
         self.model = settings.ollama_chat_model
         logger.info("LocalRAG initialised (model=%s)", self.model)
 
@@ -166,3 +166,100 @@ class LocalRAG:
         )
 
         return result.answer.strip(), validated
+
+    def answer_stream(
+        self, question: str, sources: list[SourceChunk]
+    ):
+        """Streaming generator for RAG.
+        
+        Yields JSON strings:
+        - `{"type": "token", "text": "..."}`
+        - `{"type": "citations", "data": [...]}` at the very end
+        """
+        import json
+        if not sources:
+            logger.warning("answer_stream() called with no source chunks")
+            yield json.dumps({"type": "token", "text": "I do not know."}) + "\n"
+            yield json.dumps({"type": "citations", "data": []}) + "\n"
+            return
+
+        context = "\n\n---\n\n".join(
+            f"[chunk_id: {s.id}]\n[document_name: {s.document_name}]\n{s.content}"
+            for s in sources
+        )
+        allowed_ids: set[str] = {s.id for s in sources}
+
+        messages = [
+            {"role": "system", "content": self.SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"CONTEXT:\n{context}\n\n"
+                    f"QUESTION: {question}\n\n"
+                    "Respond with a grounded answer based ONLY on the context."
+                ),
+            },
+        ]
+
+        logger.info("RAG stream start: model=%s sources=%d", self.model, len(sources))
+        
+        # Phase 1: Stream the answer
+        full_answer = ""
+        try:
+            stream = self.raw_client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.0,
+                stream=True,
+            )
+            for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    full_answer += content
+                    yield json.dumps({"type": "token", "text": content}) + "\n"
+        except Exception as exc:
+            logger.error("Ollama streaming call failed: %s", exc)
+            yield json.dumps({"type": "token", "text": f"\n\nError: {exc}"}) + "\n"
+            return
+
+        # Phase 2: Extract citations using instructor
+        class CitationExtraction(BaseModel):
+            citations: list[_RagCitation] = Field(
+                default_factory=list,
+                description="Extract citations matching the chunk_ids for the generated answer",
+            )
+
+        citation_messages = [
+            {"role": "system", "content": "You are a citation extraction tool."},
+            {
+                "role": "user",
+                "content": (
+                    f"CONTEXT:\n{context}\n\n"
+                    f"ANSWER:\n{full_answer}\n\n"
+                    "Extract citations for the ANSWER. Only cite chunk_ids that appear exactly in CONTEXT."
+                ),
+            },
+        ]
+
+        logger.info("RAG stream Phase 2: extracting citations")
+        validated: list[dict[str, Any]] = []
+        try:
+            citation_result: CitationExtraction = self.client.chat.completions.create(
+                model=self.model,
+                messages=citation_messages,
+                response_model=CitationExtraction,
+                max_retries=2,
+                temperature=0.0,
+            )
+            
+            for item in citation_result.citations:
+                if item.chunk_id in allowed_ids:
+                    validated.append({
+                        "chunk_id": item.chunk_id,
+                        "document_name": item.document_name,
+                        "quote": item.quote[:500],
+                    })
+        except Exception as exc:
+            logger.error("Citation extraction failed: %s", exc)
+
+        yield json.dumps({"type": "citations", "data": validated}) + "\n"
