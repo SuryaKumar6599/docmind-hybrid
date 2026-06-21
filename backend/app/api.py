@@ -64,7 +64,7 @@ async def index_document(
         temp_path = Path(temp.name)
 
     try:
-        processor = DocumentProcessor()
+        processor = DocumentProcessor(ollama_client=ollama)
         markdown = processor.convert_to_markdown(temp_path)
         chunks = chunk_text(markdown, chunk_size=800, overlap=100)
         metadata = processor.metadata_for(temp_path, filename)
@@ -190,7 +190,10 @@ class ConvertResponse(BaseModel):
 
 
 @router.post("/convert", response_model=ConvertResponse)
-async def convert_document(file: UploadFile = File(...)) -> ConvertResponse:
+async def convert_document(
+    file: UploadFile = File(...),
+    ollama: OllamaClient = Depends(get_ollama),
+) -> ConvertResponse:
     """
     Convert any document (PDF, DOCX, PPTX, Excel, HTML, images, TXT…) to clean Markdown.
     Uses Microsoft MarkItDown. Returns markdown text + stats for token budget planning.
@@ -204,7 +207,7 @@ async def convert_document(file: UploadFile = File(...)) -> ConvertResponse:
         tmp.write(await file.read())
         tmp_path = Path(tmp.name)
     try:
-        processor = DocumentProcessor()
+        processor = DocumentProcessor(ollama_client=ollama)
         markdown = processor.convert_to_markdown(tmp_path)
         return ConvertResponse(
             filename=filename,

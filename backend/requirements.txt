@@ -25,6 +25,7 @@ pydantic-settings>=2.3.0
 
 # --- Document conversion (PDF, DOCX, PPTX, images → Markdown) ---
 markitdown[all]>=0.0.1
+pymupdf>=1.24.0          # scanned/image-only PDF fallback (renders pages → vision OCR)
 
 # --- Token counting (enforce 8k context budget) ---
 tiktoken>=0.7.0

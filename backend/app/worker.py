@@ -103,11 +103,11 @@ def process_resume(
         local_file = Path(tmpdir) / Path(storage_path).name
         _download_from_supabase(supa, "resumes", storage_path, local_file)
 
-        processor = DocumentProcessor()
+        ollama = OllamaClient(settings)
+        processor = DocumentProcessor(ollama_client=ollama)
         raw_markdown = processor.convert_to_markdown(local_file)
         cleaned = clean_markdown(raw_markdown)
 
-        ollama = OllamaClient(settings)
         store = SupabaseVectorStore(settings)
 
         # Store in documents table with category='resume'
@@ -161,7 +161,8 @@ def process_job_application(
         # --- Download & convert JD ---
         jd_file = tmpdir_path / Path(jd_storage_path).name
         _download_from_supabase(supa, "job-descriptions", jd_storage_path, jd_file)
-        processor = DocumentProcessor()
+        ollama = OllamaClient(settings)
+        processor = DocumentProcessor(ollama_client=ollama)
         raw_jd = processor.convert_to_markdown(jd_file)
         jd_md = clean_markdown(raw_jd)
 
