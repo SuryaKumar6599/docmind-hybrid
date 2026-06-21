@@ -69,7 +69,8 @@ export default function Home() {
       if (!response.ok) throw new Error(await response.text());
       const data = await response.json();
       const chunks = data.chunks || 0;
-      const tokens = Math.round((file.size / 1024) * 0.35); // rough estimate from file size
+      // Use real chunk count × avg tokens per chunk for accurate estimate
+      const tokens = Math.round(chunks * 200);
       setIndexedDocs((prev) => [
         { name: data.document_name || file.name, chunks, tokens, time: new Date().toLocaleTimeString() },
         ...prev,

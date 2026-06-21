@@ -36,6 +36,7 @@ interface ConvertResult {
   char_count: number;
   word_count: number;
   estimated_tokens: number;
+  ocr_used: boolean;
 }
 
 export default function Convert() {
@@ -43,6 +44,7 @@ export default function Convert() {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [ocrMode, setOcrMode] = useState(false);
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -62,13 +64,15 @@ export default function Convert() {
 
   async function convert() {
     if (!file || !API_URL) return;
-    setLoading(true); setError(null); setResult(null);
+    setLoading(true); setOcrMode(false); setError(null); setResult(null);
     try {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`${API_URL}/convert`, { method: "POST", body: form });
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
-      setResult(await res.json());
+      const data = await res.json();
+      setOcrMode(data.ocr_used ?? false);
+      setResult(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Conversion failed");
     } finally {
@@ -96,7 +100,7 @@ export default function Convert() {
   }
 
   function reset() {
-    setFile(null); setResult(null); setError(null);
+    setFile(null); setResult(null); setError(null); setOcrMode(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -217,7 +221,11 @@ export default function Convert() {
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-moss py-3 text-sm font-semibold text-white disabled:bg-ink/25 hover:bg-moss/90 transition-colors"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <FileCode2 size={16} />}
-            {loading ? "Converting with MarkItDown…" : "Convert to Markdown"}
+            {loading
+              ? ocrMode
+                ? "Running Vision OCR… (up to 60s for scanned PDFs)"
+                : "Converting with MarkItDown…"
+              : "Convert to Markdown"}
           </button>
 
           {!apiReady && (
@@ -241,6 +249,9 @@ export default function Convert() {
                 <div className="flex items-center gap-1.5 text-sm">
                   <CheckCircle2 size={14} className="text-fern" />
                   <span className="font-medium text-ink">{result.filename}</span>
+                  {result.ocr_used && (
+                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Vision OCR</span>
+                  )}
                 </div>
                 <div className="ml-auto flex items-center gap-4 text-xs">
                   <span className="flex items-center gap-1 text-ink/50">

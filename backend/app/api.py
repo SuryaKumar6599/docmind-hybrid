@@ -1,9 +1,21 @@
+"""FastAPI route handlers for DocMind local AI service.
+
+Endpoints:
+  GET  /health          — service health + dependency status
+  GET  /                — API index
+  POST /index           — index a document into the vector store
+  POST /ask             — semantic search + RAG answer
+  POST /extract-skills  — on-demand job-match gap analysis
+  POST /convert         — convert any document to Markdown (no storage)
+"""
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
 import instructor
+import requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from openai import OpenAI
 from pydantic import BaseModel
@@ -16,8 +28,37 @@ from .rag import LocalRAG
 from .schemas import JobMatchAnalysis
 from .supabase_store import SupabaseVectorStore
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
+# ---------------------------------------------------------------------------
+# Allowed upload MIME / extension sets
+# ---------------------------------------------------------------------------
+_ALLOWED_EXTS = frozenset({
+    ".pdf", ".docx", ".pptx", ".xlsx", ".xls",
+    ".html", ".htm", ".txt", ".md", ".csv", ".json", ".xml",
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp",
+    ".zip",
+})
+
+
+def _validate_extension(filename: str) -> None:
+    """Raise HTTP 422 if the file extension is not in the allow-list."""
+    ext = Path(filename).suffix.lower()
+    if ext not in _ALLOWED_EXTS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unsupported file type '{ext}'. "
+                f"Supported: {', '.join(sorted(_ALLOWED_EXTS))}"
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Dependency factories
+# ---------------------------------------------------------------------------
 
 def get_ollama(settings: Settings = Depends(get_settings)) -> OllamaClient:
     return OllamaClient(settings)
@@ -32,9 +73,23 @@ def get_instructor_client(settings: Settings = Depends(get_settings)) -> instruc
     return instructor.from_openai(raw, mode=instructor.Mode.JSON)
 
 
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
+
 @router.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
-    return HealthResponse(status="ok", runtime="local-fastapi-ollama-v2")
+async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
+    """Return service status. Pings Ollama to verify connectivity."""
+    ollama_ok = False
+    try:
+        resp = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=3)
+        ollama_ok = resp.ok
+    except Exception as exc:
+        logger.warning("Ollama health-check failed: %s", exc)
+
+    status = "ok" if ollama_ok else "degraded"
+    logger.info("/health → %s (ollama=%s)", status, ollama_ok)
+    return HealthResponse(status=status, runtime="local-fastapi-ollama-v2")
 
 
 @router.get("/")
@@ -44,12 +99,18 @@ async def root() -> dict[str, object]:
         "version": "2.0.0",
         "status": "ok",
         "endpoints": {
+            "health":         "GET  /health",
             "index":          "POST /index           multipart: file=<document>",
             "ask":            "POST /ask             JSON: {question, match_count, category?}",
             "extract-skills": "POST /extract-skills  JSON: {resume_text, jd_text}",
+            "convert":        "POST /convert         multipart: file=<document>",
         },
     }
 
+
+# ---------------------------------------------------------------------------
+# Index
+# ---------------------------------------------------------------------------
 
 @router.post("/index", response_model=IndexResponse)
 async def index_document(
@@ -57,8 +118,13 @@ async def index_document(
     store: SupabaseVectorStore = Depends(get_store),
     ollama: OllamaClient = Depends(get_ollama),
 ) -> IndexResponse:
+    """Chunk, embed, and store a document in the Supabase vector store."""
     filename = file.filename or "document"
-    suffix = Path(filename).suffix
+    _validate_extension(filename)
+    suffix = Path(filename).suffix.lower()
+
+    logger.info("Indexing document: %s", filename)
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
         temp.write(await file.read())
         temp_path = Path(temp.name)
@@ -66,17 +132,35 @@ async def index_document(
     try:
         processor = DocumentProcessor(ollama_client=ollama)
         markdown = processor.convert_to_markdown(temp_path)
+
+        if not markdown.strip():
+            raise HTTPException(
+                status_code=422,
+                detail=f"No text could be extracted from '{filename}'. "
+                       "The file may be empty or in an unsupported format.",
+            )
+
         chunks = chunk_text(markdown, chunk_size=800, overlap=100)
         metadata = processor.metadata_for(temp_path, filename)
         document_id = store.create_document(filename, metadata, category="general")
         embeddings = [ollama.embedding(chunk) for chunk in chunks]
         store.insert_chunks(document_id, chunks, embeddings, metadata)
+
+        logger.info("Indexed '%s': %d chunks", filename, len(chunks))
         return IndexResponse(document_id=document_id, document_name=filename, chunks=len(chunks))
+
+    except HTTPException:
+        raise
     except Exception as exc:
+        logger.error("Index failed for '%s': %s", filename, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         temp_path.unlink(missing_ok=True)
 
+
+# ---------------------------------------------------------------------------
+# Ask / RAG
+# ---------------------------------------------------------------------------
 
 @router.post("/ask", response_model=AskResponse)
 async def ask_question(
@@ -85,6 +169,11 @@ async def ask_question(
     settings: Settings = Depends(get_settings),
     ollama: OllamaClient = Depends(get_ollama),
 ) -> AskResponse:
+    """Semantic search + RAG answer over indexed documents."""
+    logger.info(
+        "Ask: question=%r | category=%s | k=%d",
+        body.question[:80], body.category, body.match_count,
+    )
     try:
         query_embedding = ollama.embedding(body.question)
         sources = store.match_documents(
@@ -94,11 +183,12 @@ async def ask_question(
         answer, citations = rag.answer(body.question, sources)
         return AskResponse(answer=answer, citations=citations, sources=sources)
     except Exception as exc:
+        logger.error("Ask failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
-# Skills extraction — on-demand Stage 1 analysis (no Supabase required)
+# Skills extraction
 # ---------------------------------------------------------------------------
 
 _SKILLS_PROMPT = """\
@@ -131,21 +221,16 @@ async def extract_skills(
     settings: Settings = Depends(get_settings),
     client: instructor.Instructor = Depends(get_instructor_client),
 ) -> JobMatchAnalysis:
-    """
-    On-demand skills gap analysis from raw resume + JD text.
-
-    Returns JobMatchAnalysis JSON:
-      missing_keywords     — skills required by JD but absent from resume
-      matched_skills       — skills present in both
-      match_score          — 0-100 alignment score
-      recommended_projects — up to 3 portfolio projects that best fit the role
-      core_highlights      — candidate's top selling points for this role
-      one_line_pitch       — 15-word summary of fit
-    """
+    """On-demand skills gap analysis from raw resume + JD text."""
     if not body.resume_text.strip():
         raise HTTPException(status_code=422, detail="resume_text must not be empty")
     if not body.jd_text.strip():
         raise HTTPException(status_code=422, detail="jd_text must not be empty")
+
+    logger.info(
+        "Skills extraction: resume=%d chars, jd=%d chars",
+        len(body.resume_text), len(body.jd_text),
+    )
 
     prompt = _SKILLS_PROMPT.format(
         resume_text=body.resume_text[:6000],
@@ -162,15 +247,18 @@ async def extract_skills(
                     "role": "system",
                     "content": (
                         "You are an expert ATS analyst. "
-                        "Respond with valid JSON matching the requested schema exactly."
+                        "Respond with valid JSON matching the requested schema exactly. "
+                        "Do not hallucinate projects or skills not present in the resume."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,
         )
+        logger.info("Skills extraction complete: match_score=%d", result.match_score)
         return result
     except Exception as exc:
+        logger.error("Skills extraction failed: %s", exc)
         raise HTTPException(
             status_code=500,
             detail=f"Skills extraction failed: {exc}",
@@ -178,7 +266,7 @@ async def extract_skills(
 
 
 # ---------------------------------------------------------------------------
-# Markdown conversion — Microsoft MarkItDown on any document
+# Convert (Markdown export — no storage)
 # ---------------------------------------------------------------------------
 
 class ConvertResponse(BaseModel):
@@ -187,6 +275,7 @@ class ConvertResponse(BaseModel):
     char_count: int
     word_count: int
     estimated_tokens: int
+    ocr_used: bool = False   # True when Vision OCR fallback was triggered
 
 
 @router.post("/convert", response_model=ConvertResponse)
@@ -194,29 +283,51 @@ async def convert_document(
     file: UploadFile = File(...),
     ollama: OllamaClient = Depends(get_ollama),
 ) -> ConvertResponse:
-    """
-    Convert any document (PDF, DOCX, PPTX, Excel, HTML, images, TXT…) to clean Markdown.
-    Uses Microsoft MarkItDown. Returns markdown text + stats for token budget planning.
+    """Convert any supported document to clean Markdown.
 
-    Supported formats: PDF, DOCX, PPTX, XLSX, HTML, TXT, MD, CSV, JSON, XML,
-                       PNG, JPG, GIF, BMP, TIFF, WebP (via vision OCR)
+    Supports: PDF, DOCX, PPTX, Excel, HTML, TXT, MD, CSV, JSON, XML,
+              PNG, JPG, GIF, BMP, TIFF, WebP, ZIP.
+
+    For scanned/image-only PDFs and image files, Vision OCR
+    via qwen2.5vl is used automatically.
     """
     filename = file.filename or "document"
-    suffix = Path(filename).suffix
+    _validate_extension(filename)
+    suffix = Path(filename).suffix.lower()
+
+    logger.info("Convert request: %s", filename)
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(await file.read())
         tmp_path = Path(tmp.name)
+
     try:
         processor = DocumentProcessor(ollama_client=ollama)
         markdown = processor.convert_to_markdown(tmp_path)
+
+        # Detect whether OCR was used (image file or scanned PDF fallback)
+        is_image = suffix in {
+            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp"
+        }
+        # If PDF produced output and starts with "<!-- Page" it went through OCR
+        ocr_used = is_image or markdown.startswith("<!-- Page")
+
+        logger.info(
+            "Convert complete: %s → %d chars (ocr=%s)", filename, len(markdown), ocr_used
+        )
+
         return ConvertResponse(
             filename=filename,
             markdown=markdown,
             char_count=len(markdown),
             word_count=len(markdown.split()),
             estimated_tokens=len(markdown) // 4,
+            ocr_used=ocr_used,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
+        logger.error("Convert failed for '%s': %s", filename, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         tmp_path.unlink(missing_ok=True)

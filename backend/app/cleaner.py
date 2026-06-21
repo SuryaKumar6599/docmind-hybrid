@@ -2,6 +2,7 @@
 
 Fixes common PDF extraction artifacts before sending text to the LLM.
 Each rule is documented with the artifact it targets.
+Rules are applied in order — earlier rules may enable later ones.
 """
 from __future__ import annotations
 
@@ -9,13 +10,17 @@ import re
 
 
 def clean_pdf_text(text: str) -> str:
-    """Apply a sequence of targeted regex fixes to raw PDF-extracted text.
+    """Apply a sequence of targeted regex fixes to raw PDF-extracted text."""
 
-    Rules are applied in order — earlier rules may enable later ones.
-    """
-    # 1. Fix inter-letter spaces: "L a n g u a g e s" → "Languages"
-    #    Matches alternating letter–space–letter runs of 3+ letters.
-    text = re.sub(r"(?<=[a-zA-Z]) (?=[a-zA-Z](?= [a-zA-Z]|$))", "", text)
+    # 1. Fix inter-letter spaces only for runs of 4+ single-letter tokens:
+    #    "L a n g u a g e s" → "Languages"
+    #    Uses a positive lookahead to require at least 3 consecutive pairs,
+    #    avoiding false collapses of acronyms like "A B C" (2-letter runs).
+    text = re.sub(
+        r"\b([A-Za-z]) (?=[A-Za-z] [A-Za-z] [A-Za-z](?= [A-Za-z]|\b))",
+        r"\1",
+        text,
+    )
 
     # 2. Fix escaped pipes from table extraction: "\|" → "|"
     text = text.replace(r"\|", "|")
@@ -38,7 +43,7 @@ def clean_pdf_text(text: str) -> str:
     # 8. Remove PDF page-number artifacts: lines that are *only* a number
     text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.MULTILINE)
 
-    # 9. Fix curly/smart quotes to straight quotes (LLM tokenization is cleaner)
+    # 9. Fix curly/smart quotes to straight quotes (cleaner LLM tokenization)
     text = text.replace("\u2018", "'").replace("\u2019", "'")
     text = text.replace("\u201c", '"').replace("\u201d", '"')
 
@@ -52,6 +57,6 @@ def clean_markdown(text: str) -> str:
     """Lightweight cleaner for already-converted Markdown (MarkItDown output)."""
     # Collapse excessive blank lines
     text = re.sub(r"\n{3,}", "\n\n", text)
-    # Collapse multiple spaces (not at start of line — preserves code indentation)
+    # Collapse multiple spaces (not at line start — preserves code indentation)
     text = re.sub(r"(?<!^)[ \t]{2,}", " ", text, flags=re.MULTILINE)
     return text.strip()
