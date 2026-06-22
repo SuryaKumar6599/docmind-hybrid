@@ -155,21 +155,59 @@ Open the preview pane in Replit, or [http://localhost:5173](http://localhost:517
 
 ---
 
-## Deploying to production (Replit)
+## Deploying to production
 
-1. Set the three `VITE_*` secrets in **Replit Secrets** (already done above)
-2. Click **Deploy** in the Replit header
-3. Your app is live at `https://your-app.replit.app`
-4. The local FastAPI worker must keep running on your Mac with Cloudflare Tunnel open — the deployed frontend calls it via `VITE_DOCMIND_API_URL`
+### Frontend: Vercel (recommended)
 
-### Optional: Vercel
+The Vite React frontend is a fully static SPA — it deploys to Vercel in seconds.
 
 ```bash
 cd artifacts/docmind
 vercel deploy
 ```
 
-Set the three `VITE_*` environment variables in the Vercel dashboard.
+In the Vercel dashboard → **Settings → Environment Variables**, add:
+
+| Variable | Value |
+|----------|-------|
+| `VITE_SUPABASE_URL` | `https://your-project.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
+| `VITE_DOCMIND_API_URL` | URL to your running FastAPI backend (see below) |
+
+> **Note:** The Intelligence UI (`/intelligence`) calls `/generate-tailored` and `/export-docx` synchronously. These endpoints require a **persistent** backend — they cannot run in a serverless environment that lacks GPU access.
+
+---
+
+### Frontend: Replit
+
+1. Set the three `VITE_*` secrets in **Replit Secrets**
+2. Click **Deploy** in the Replit header
+3. Your app is live at `https://your-app.replit.app`
+
+---
+
+### Backend: Options
+
+The FastAPI backend requires Ollama (GPU preferred). Choose one of:
+
+| Option | Setup | Notes |
+|--------|-------|-------|
+| **Local Mac + Cloudflare Tunnel** | `cloudflared tunnel --url http://localhost:8000` | Free, zero-latency, easiest |
+| **Render** (free tier) | Push to GitHub → connect to Render as a web service, set `PORT=8000` | No GPU on free tier — Ollama may be slow |
+| **Railway** | Deploy from GitHub, add env vars in Railway dashboard | GPU plans available |
+| **Self-hosted VPS** | Run `uvicorn app.main:app --host 0.0.0.0 --port 8000` + `python -m app.worker` | Full control, best for production |
+
+For any hosted backend, set these environment variables on the server:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+OLLAMA_BASE_URL=http://localhost:11434   # or remote Ollama URL
+OLLAMA_CHAT_MODEL=qwen2.5:7b
+OLLAMA_VISION_MODEL=qwen2.5vl:7b
+OLLAMA_EMBED_MODEL=nomic-embed-text
+DOCMIND_CORS_ORIGINS=https://your-app.vercel.app,https://your-app.replit.app
+```
 
 ---
 

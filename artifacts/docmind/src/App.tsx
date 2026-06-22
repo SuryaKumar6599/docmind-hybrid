@@ -4,6 +4,7 @@ import Home from "@/pages/home";
 import Resumes from "@/pages/resumes";
 import Tracker from "@/pages/tracker";
 import Convert from "@/pages/convert";
+import Intelligence from "@/pages/intelligence";
 
 function Router() {
   return (
@@ -12,6 +13,7 @@ function Router() {
       <Route path="/resumes" component={Resumes} />
       <Route path="/tracker" component={Tracker} />
       <Route path="/convert" component={Convert} />
+      <Route path="/intelligence" component={Intelligence} />
       <Route>
         <div className="flex min-h-screen items-center justify-center text-ink/40">
           Page not found

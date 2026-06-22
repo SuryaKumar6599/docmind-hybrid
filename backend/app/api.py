@@ -1,12 +1,14 @@
 """FastAPI route handlers for DocMind local AI service.
 
 Endpoints:
-  GET  /health          — service health + dependency status
-  GET  /                — API index
-  POST /index           — index a document into the vector store
-  POST /ask             — semantic search + RAG answer
-  POST /extract-skills  — on-demand job-match gap analysis
-  POST /convert         — convert any document to Markdown (no storage)
+  GET  /health              — service health + dependency status
+  GET  /                    — API index
+  POST /index               — index a document into the vector store
+  POST /ask                 — semantic search + RAG answer
+  POST /extract-skills      — on-demand job-match gap analysis
+  POST /convert             — convert any document to Markdown (no storage)
+  POST /generate-tailored   — stage 2 creative rewrite (used by Intelligence UI)
+  POST /export-docx         — render tailored resume as a .docx stream
 """
 from __future__ import annotations
 
@@ -23,11 +25,13 @@ from pydantic import BaseModel
 
 from .config import Settings, get_settings
 from .document_processing import DocumentProcessor, chunk_text
+from .llm_gateway import BaseChatProvider, BaseEmbeddingProvider, get_chat_provider, get_embedding_provider
 from .models import AskRequest, AskResponse, HealthResponse, IndexResponse
-from .ollama import OllamaClient
 from .rag import LocalRAG
-from .schemas import JobMatchAnalysis
+from .schemas import JobMatchAnalysis, TailoredContent
 from .supabase_store import SupabaseVectorStore
+from .docx_renderer import render_tailored_resume
+from .prompts import STAGE2_SYSTEM, build_stage2_user_message
 
 logger = logging.getLogger(__name__)
 
@@ -61,17 +65,17 @@ def _validate_extension(filename: str) -> None:
 # Dependency factories
 # ---------------------------------------------------------------------------
 
-def get_ollama(settings: Settings = Depends(get_settings)) -> OllamaClient:
-    return OllamaClient(settings)
+def get_chat_provider_dep(settings: Settings = Depends(get_settings)) -> BaseChatProvider:
+    return get_chat_provider(settings)
 
+def get_embedding_provider_dep(settings: Settings = Depends(get_settings)) -> BaseEmbeddingProvider:
+    return get_embedding_provider(settings)
 
 def get_store(settings: Settings = Depends(get_settings)) -> SupabaseVectorStore:
     return SupabaseVectorStore(settings)
 
-
-def get_instructor_client(settings: Settings = Depends(get_settings)) -> instructor.Instructor:
-    raw = OpenAI(base_url=f"{settings.ollama_base_url}/v1", api_key="ollama")
-    return instructor.from_openai(raw, mode=instructor.Mode.JSON)
+def get_instructor_client(chat_provider: BaseChatProvider = Depends(get_chat_provider_dep)) -> instructor.Instructor:
+    return chat_provider.get_instructor_client()
 
 
 # ---------------------------------------------------------------------------
@@ -100,13 +104,80 @@ async def root() -> dict[str, object]:
         "version": "2.0.0",
         "status": "ok",
         "endpoints": {
-            "health":         "GET  /health",
-            "index":          "POST /index           multipart: file=<document>",
-            "ask":            "POST /ask             JSON: {question, match_count, category?}",
-            "extract-skills": "POST /extract-skills  JSON: {resume_text, jd_text}",
-            "convert":        "POST /convert         multipart: file=<document>",
+            "health":            "GET  /health",
+            "index":             "POST /index              multipart: file=<document>",
+            "ask":               "POST /ask                JSON: {question, match_count, category?}",
+            "extract-skills":    "POST /extract-skills     JSON: {resume_text, jd_text}",
+            "convert":           "POST /convert            multipart: file=<document>",
+            "generate-tailored": "POST /generate-tailored  JSON: {resume_text, analysis, company, role}",
+            "export-docx":       "POST /export-docx        JSON: {content, candidate_name, company, role} → .docx stream",
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Index (vector store)
+# ---------------------------------------------------------------------------
+
+class IndexResponse(BaseModel):  # noqa: F811 — shadows models.IndexResponse intentionally
+    document_id: str
+    filename: str
+    chunk_count: int
+    char_count: int
+
+
+@router.post("/index")
+async def index_document(
+    file: UploadFile = File(...),
+    store: SupabaseVectorStore = Depends(get_store),
+    chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
+    embedding_provider: BaseEmbeddingProvider = Depends(get_embedding_provider_dep),
+):
+    """Convert a document to Markdown, chunk it, embed chunks, and upsert into Supabase."""
+    filename = file.filename or "document"
+    _validate_extension(filename)
+    suffix = Path(filename).suffix.lower()
+    logger.info("Index request: %s", filename)
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await file.read())
+        tmp_path = Path(tmp.name)
+
+    try:
+        processor = DocumentProcessor(chat_provider=chat_provider)
+        markdown = processor.convert_to_markdown(tmp_path)
+        chunks: list[str] = chunk_text(markdown)
+
+        if not chunks:
+            raise HTTPException(status_code=422, detail="Document produced no extractable text.")
+
+        # Create document record first, then embed + insert chunks in bulk.
+        document_id = store.create_document(
+            name=filename,
+            metadata={"source": filename, "char_count": len(markdown)},
+        )
+        embeddings = [embedding_provider.embed(chunk) for chunk in chunks]
+        store.insert_chunks(
+            document_id=document_id,
+            chunks=chunks,
+            embeddings=embeddings,
+            metadata={"filename": filename},
+        )
+
+        logger.info("Indexed %d chunks for '%s' (doc_id=%s)", len(chunks), filename, document_id)
+        return {
+            "document_id": document_id,
+            "filename": filename,
+            "chunk_count": len(chunks),
+            "char_count": len(markdown),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Index failed for '%s': %s", filename, exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +189,8 @@ async def ask_question(
     body: AskRequest,
     store: SupabaseVectorStore = Depends(get_store),
     settings: Settings = Depends(get_settings),
-    ollama: OllamaClient = Depends(get_ollama),
+    chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
+    embedding_provider: BaseEmbeddingProvider = Depends(get_embedding_provider_dep),
 ):
     """Semantic search + streaming RAG answer over indexed documents."""
     logger.info(
@@ -126,14 +198,14 @@ async def ask_question(
         body.question[:80], body.category, body.match_count,
     )
     try:
-        query_embedding = ollama.embedding(body.question)
+        query_embedding = embedding_provider.embed(body.question)
         sources = store.match_documents_hybrid(
             query_text=body.question,
             query_embedding=query_embedding,
             match_count=body.match_count,
             category=body.category
         )
-        rag = LocalRAG(settings)
+        rag = LocalRAG(settings, chat_provider)
         return StreamingResponse(
             rag.answer_stream(body.question, sources),
             media_type="application/x-ndjson"
@@ -237,7 +309,7 @@ class ConvertResponse(BaseModel):
 @router.post("/convert", response_model=ConvertResponse)
 async def convert_document(
     file: UploadFile = File(...),
-    ollama: OllamaClient = Depends(get_ollama),
+    chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
 ) -> ConvertResponse:
     """Convert any supported document to clean Markdown.
 
@@ -245,7 +317,7 @@ async def convert_document(
               PNG, JPG, GIF, BMP, TIFF, WebP, ZIP.
 
     For scanned/image-only PDFs and image files, Vision OCR
-    via qwen2.5vl is used automatically.
+    is used automatically.
     """
     filename = file.filename or "document"
     _validate_extension(filename)
@@ -258,7 +330,7 @@ async def convert_document(
         tmp_path = Path(tmp.name)
 
     try:
-        processor = DocumentProcessor(ollama_client=ollama)
+        processor = DocumentProcessor(chat_provider=chat_provider)
         markdown = processor.convert_to_markdown(tmp_path)
 
         # Detect whether OCR was used (image file or scanned PDF fallback)
@@ -287,3 +359,117 @@ async def convert_document(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         tmp_path.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Interactive Tailoring UI Endpoints
+# ---------------------------------------------------------------------------
+
+class GenerateTailoredRequest(BaseModel):
+    resume_text: str
+    analysis: JobMatchAnalysis
+    company: str
+    role: str
+
+
+@router.post("/generate-tailored", response_model=TailoredContent)
+async def generate_tailored(
+    body: GenerateTailoredRequest,
+    settings: Settings = Depends(get_settings),
+    client: instructor.Instructor = Depends(get_instructor_client),
+) -> TailoredContent:
+    """Stage 2: Generate rewritten summary and bullets based on Stage 1 analysis."""
+    if not body.resume_text.strip():
+        raise HTTPException(status_code=422, detail="resume_text must not be empty")
+    if not body.company.strip():
+        raise HTTPException(status_code=422, detail="company must not be empty")
+    if not body.role.strip():
+        raise HTTPException(status_code=422, detail="role must not be empty")
+
+    lines = body.resume_text.splitlines()
+    summary_lines: list[str] = []
+    bullet_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("- ") or stripped.startswith("* "):
+            bullet_lines.append(stripped.lstrip("- *").strip())
+        elif stripped and not stripped.startswith("#") and len(summary_lines) < 5:
+            summary_lines.append(stripped)
+
+    original_summary = " ".join(summary_lines[:3])
+    experience_bullets = bullet_lines[:20]
+
+    logger.info(
+        "Generate tailored: resume=%d chars, company=%r, role=%r",
+        len(body.resume_text), body.company, body.role,
+    )
+
+    stage2_messages = [
+        {"role": "system", "content": STAGE2_SYSTEM},
+        {"role": "user", "content": build_stage2_user_message(
+            original_summary, experience_bullets, body.analysis, body.company, body.role
+        )},
+    ]
+
+    try:
+        tailored: TailoredContent = client.chat.completions.create(
+            model=settings.ollama_chat_model,
+            messages=stage2_messages,
+            response_model=TailoredContent,
+            max_retries=3,
+            temperature=0.3,
+        )
+        logger.info("Generate tailored complete for %r at %r", body.role, body.company)
+        return tailored
+    except Exception as exc:
+        logger.error("Generate tailored failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+class ExportDocxRequest(BaseModel):
+    content: TailoredContent
+    candidate_name: str
+    company: str
+    role: str
+
+
+@router.post("/export-docx")
+async def export_docx(body: ExportDocxRequest):
+    """Stage 3: Render TailoredContent into a DOCX file and stream it to the browser."""
+    if not body.candidate_name.strip():
+        raise HTTPException(status_code=422, detail="candidate_name must not be empty")
+    if not body.company.strip():
+        raise HTTPException(status_code=422, detail="company must not be empty")
+    if not body.role.strip():
+        raise HTTPException(status_code=422, detail="role must not be empty")
+
+    logger.info("Export DOCX: candidate=%r, company=%r, role=%r",
+                body.candidate_name, body.company, body.role)
+    try:
+        # Read bytes to memory inside tempdir scope so the dir can safely be cleaned up.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir)
+            artifacts = render_tailored_resume(
+                content=body.content,
+                candidate_name=body.candidate_name,
+                company=body.company,
+                role=body.role,
+                output_dir=out_dir,
+            )
+            docx_path = artifacts.get("docx")
+            if not docx_path or not Path(docx_path).exists():
+                raise RuntimeError("render_tailored_resume did not produce a DOCX file")
+            file_bytes = Path(docx_path).read_bytes()
+
+        safe_company = body.company.replace(" ", "_").replace("/", "-")
+        filename = f"Tailored_Resume_{safe_company}.docx"
+        return StreamingResponse(
+            iter([file_bytes]),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Export DOCX failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

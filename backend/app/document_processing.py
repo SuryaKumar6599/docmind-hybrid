@@ -26,7 +26,7 @@ from markitdown import MarkItDown
 from .cleaner import clean_pdf_text, clean_markdown as _clean_md
 
 if TYPE_CHECKING:
-    from .ollama import OllamaClient
+    from .llm_gateway import BaseChatProvider
 
 logger = logging.getLogger(__name__)
 
@@ -98,13 +98,13 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str
 class DocumentProcessor:
     """Convert any supported document to clean Markdown.
 
-    Pass an `ollama_client` to enable Vision OCR for images and
+    Pass a `chat_provider` to enable Vision OCR for images and
     scanned PDF fallback.
     """
 
-    def __init__(self, ollama_client: "OllamaClient | None" = None) -> None:
+    def __init__(self, chat_provider: "BaseChatProvider | None" = None) -> None:
         self.converter = MarkItDown()
-        self.ollama_client = ollama_client
+        self.chat_provider = chat_provider
 
     def convert_to_markdown(self, file_path: str | Path) -> str:
         """Convert *file_path* to clean Markdown text."""
@@ -112,12 +112,12 @@ class DocumentProcessor:
         ext = path.suffix.lower()
 
         if ext in _IMAGE_EXTS:
-            if self.ollama_client:
+            if self.chat_provider:
                 logger.info("Vision OCR: %s", path.name)
-                raw = self.ollama_client.vision_ocr(str(path))
+                raw = self.chat_provider.vision(str(path))
             else:
                 logger.warning(
-                    "No ollama_client — cannot OCR image %s; returning empty string", path.name
+                    "No chat_provider — cannot OCR image %s; returning empty string", path.name
                 )
                 raw = ""
         else:
@@ -131,7 +131,7 @@ class DocumentProcessor:
 
             # Scanned PDF fallback: if MarkItDown returns nothing, try Vision OCR per page
             if not raw.strip() and ext == ".pdf":
-                if self.ollama_client:
+                if self.chat_provider:
                     logger.info(
                         "MarkItDown returned empty text for %s — attempting scanned-PDF OCR",
                         path.name,
@@ -139,7 +139,7 @@ class DocumentProcessor:
                     raw = self._ocr_pdf_pages(path)
                 else:
                     logger.warning(
-                        "No ollama_client for scanned PDF %s — returning empty string", path.name
+                        "No chat_provider for scanned PDF %s — returning empty string", path.name
                     )
 
         cleaned = clean_pdf_text(raw)
@@ -154,7 +154,7 @@ class DocumentProcessor:
         """Render each page of a scanned PDF as a PNG and run Vision OCR.
 
         Caps at _MAX_OCR_PAGES to prevent request timeouts.
-        Requires pymupdf (pip install pymupdf) and self.ollama_client.
+        Requires pymupdf (pip install pymupdf) and self.chat_provider.
         """
         try:
             import fitz  # pymupdf
@@ -187,7 +187,7 @@ class DocumentProcessor:
                 pix.save(str(img_path))
                 logger.info("OCR page %d/%d of %s", page_num + 1, pages_to_ocr, file_path.name)
                 try:
-                    page_text = self.ollama_client.vision_ocr(str(img_path))  # type: ignore[union-attr]
+                    page_text = self.chat_provider.vision(str(img_path))  # type: ignore[union-attr]
                     if page_text.strip():
                         pages_text.append(f"<!-- Page {page_num + 1} -->\n{page_text}")
                 except Exception as exc:

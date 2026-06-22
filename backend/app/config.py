@@ -12,10 +12,14 @@ load_dotenv()
 class Settings:
     supabase_url: str
     supabase_service_role_key: str
+    chat_provider: str = "ollama"  # "ollama"
+    embedding_provider: str = "ollama"  # "ollama"
+    # Ollama settings
     ollama_base_url: str = "http://localhost:11434"
     ollama_chat_model: str = "qwen2.5:7b"
     ollama_vision_model: str = "qwen2.5vl:7b"
     ollama_embed_model: str = "nomic-embed-text"
+    
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
     # Token budget constants (8k context window)
     token_budget_system: int = 800
@@ -34,6 +38,8 @@ class Settings:
         return cls(
             supabase_url=os.getenv("SUPABASE_URL", ""),
             supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
+            chat_provider=os.getenv("CHAT_PROVIDER", "ollama").lower(),
+            embedding_provider=os.getenv("EMBEDDING_PROVIDER", "ollama").lower(),
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
             ollama_chat_model=os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
             ollama_vision_model=os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b"),

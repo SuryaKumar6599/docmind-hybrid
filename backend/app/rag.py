@@ -16,10 +16,10 @@ import logging
 from typing import Any
 
 import instructor
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from .config import Settings
+from .llm_gateway import BaseChatProvider
 from .models import Citation, SourceChunk
 
 logger = logging.getLogger(__name__)
@@ -81,13 +81,10 @@ class LocalRAG:
         "and leave citations as an empty list."
     )
 
-    def __init__(self, settings: Settings) -> None:
-        self.raw_client = OpenAI(
-            base_url=f"{settings.ollama_base_url}/v1",
-            api_key="ollama",
-        )
-        self.client = instructor.from_openai(self.raw_client, mode=instructor.Mode.JSON)
-        self.model = settings.ollama_chat_model
+    def __init__(self, settings: Settings, chat_provider: BaseChatProvider) -> None:
+        self.raw_client = chat_provider.get_chat_client()
+        self.client = chat_provider.get_instructor_client()
+        self.model = settings.groq_chat_model if settings.chat_provider == "groq" else settings.ollama_chat_model
         logger.info("LocalRAG initialised (model=%s)", self.model)
 
     def answer(
@@ -218,7 +215,7 @@ class LocalRAG:
                     full_answer += content
                     yield json.dumps({"type": "token", "text": content}) + "\n"
         except Exception as exc:
-            logger.error("Ollama streaming call failed: %s", exc)
+            logger.error("Streaming call failed: %s", exc)
             yield json.dumps({"type": "token", "text": f"\n\nError: {exc}"}) + "\n"
             return
 
