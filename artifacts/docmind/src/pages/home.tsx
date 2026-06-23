@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { motion, AnimatePresence } from "framer-motion";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -232,7 +233,12 @@ export default function Home() {
     <main className="min-h-screen px-4 py-6 sm:px-8 lg:px-10">
       <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[340px_1fr]">
         {/* ── Sidebar ── */}
-        <aside className="space-y-4">
+        <motion.aside 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="space-y-4"
+        >
           <header className="border-b border-ink/10 pb-5">
             <p className="text-sm font-semibold text-moss">DocMind</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-normal text-ink">
@@ -333,11 +339,16 @@ export default function Home() {
               </ul>
             </section>
           )}
-        </aside>
+        </motion.aside>
 
         {/* ── Chat ── */}
-        <section className="flex min-h-[calc(100vh-3rem)] flex-col rounded-lg border border-ink/10 bg-white/85 shadow-sm">
-          <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4">
+        <motion.section 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
+          className="flex min-h-[calc(100vh-3rem)] flex-col rounded-xl border border-ink/10 bg-white/60 backdrop-blur-xl shadow-sm shadow-ink/5"
+        >
+          <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4 bg-white/40">
             <div className="flex items-center gap-2 text-sm font-semibold text-moss">
               <Search size={18} /> Search
             </div>
@@ -392,7 +403,7 @@ export default function Home() {
             </div>
             <p className="mt-1.5 text-right text-xs text-ink/25">Press Enter to send</p>
           </form>
-        </section>
+        </motion.section>
       </div>
     </main>
   );
@@ -401,9 +412,13 @@ export default function Home() {
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
   return (
-    <article className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+    <motion.article 
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+    >
       {!isUser && <Bot className="mt-2 shrink-0 text-moss" size={22} />}
-      <div className={`max-w-3xl rounded-lg px-4 py-3 ${isUser ? "bg-signal text-white" : "bg-paper text-ink"}`}>
+      <div className={`max-w-3xl rounded-xl px-5 py-3.5 shadow-sm ${isUser ? "bg-signal text-white" : "bg-white border border-ink/5 text-ink"}`}>
         <p className="whitespace-pre-wrap leading-7">{message.content}</p>
         {!isUser && message.citations && message.citations.length > 0 && (
           <div className="mt-4 space-y-2">
@@ -419,6 +434,6 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         )}
       </div>
       {isUser && <User className="mt-2 shrink-0 text-signal" size={22} />}
-    </article>
+    </motion.article>
   );
 }

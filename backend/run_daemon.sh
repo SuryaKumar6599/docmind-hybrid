@@ -5,7 +5,7 @@ source venv/bin/activate
 
 # 1. Start FastAPI in the background
 echo "Starting FastAPI..."
-uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+uvicorn app.api:app --host 127.0.0.1 --port 8000 &
 FASTAPI_PID=$!
 
 # 2. Start Tunnel Manager (which uploads URL to Supabase)
