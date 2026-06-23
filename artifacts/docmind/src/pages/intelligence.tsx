@@ -450,7 +450,7 @@ export default function Intelligence() {
     !analysis
       ? ""
       : analysis.match_score >= 70
-      ? "text-emerald-500"
+      ? "text-moss"
       : analysis.match_score >= 45
       ? "text-amber-500"
       : "text-red-500";
@@ -459,7 +459,7 @@ export default function Intelligence() {
     !analysis
       ? ""
       : analysis.match_score >= 70
-      ? "bg-emerald-500"
+      ? "bg-moss"
       : analysis.match_score >= 45
       ? "bg-amber-500"
       : "bg-red-500";
@@ -468,23 +468,17 @@ export default function Intelligence() {
     <div className="min-h-screen py-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         {/* ── Header ── */}
-        <header className="mb-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20">
-              <BrainCircuit className="text-white" size={20} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">Resume Intelligence</h1>
-              <p className="text-sm text-slate-500">
-                AI-powered gap analysis · GitHub project injection · Live editing
-              </p>
-            </div>
-          </div>
+        <header className="mb-6 border-b border-ink/10 pb-5">
+          <p className="text-sm font-semibold text-moss">DocMind</p>
+          <h1 className="mt-1 text-3xl font-semibold text-ink">Resume Intelligence</h1>
+          <p className="mt-1 text-sm text-ink/60">
+            AI-powered gap analysis · GitHub project injection · Live editing
+          </p>
         </header>
 
         {/* ── Errors ── */}
         {error && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             <AlertCircle size={16} className="mt-0.5 shrink-0" />
             <span>{error}</span>
             <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600">
@@ -499,20 +493,20 @@ export default function Intelligence() {
           ══════════════════════════════════════════════════════ */}
           <div className="space-y-5">
             {/* ── Step 1: Inputs ── */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">1</span>
-                <h2 className="font-semibold text-slate-800">Setup</h2>
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-moss text-xs font-bold text-white">1</span>
+                <h2 className="font-semibold text-ink">Setup</h2>
               </div>
 
               {/* Resume selector */}
               <div className="mb-4">
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink/60">
                   Base Resume
                 </label>
                 <select
                   id="resume-select"
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/20 disabled:opacity-50"
+                  className="w-full rounded-lg border border-ink/10 bg-ink/5 px-3 py-2.5 text-sm text-ink focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20 disabled:opacity-50"
                   value={selectedResumeId}
                   onChange={(e) => setSelectedResumeId(e.target.value)}
                   disabled={!isSupabaseConfigured}
@@ -525,9 +519,9 @@ export default function Intelligence() {
                   ))}
                 </select>
                 {isSupabaseConfigured && resumes.length === 0 && (
-                  <p className="mt-1.5 text-xs text-slate-400">
+                  <p className="mt-1.5 text-xs text-ink/40">
                     No processed resumes yet.{" "}
-                    <a href="/resumes" className="text-emerald-600 underline">Upload one →</a>
+                    <a href="/resumes" className="text-moss underline">Upload one →</a>
                   </p>
                 )}
               </div>
@@ -535,37 +529,37 @@ export default function Intelligence() {
               {/* Company + Role */}
               <div className="mb-4 grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Company</label>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink/60">Company</label>
                   <input
                     id="company-input"
                     type="text"
                     placeholder="Google"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                    className="w-full rounded-lg border border-ink/10 bg-ink/5 px-3 py-2.5 text-sm text-ink placeholder:text-ink/30 focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Role</label>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink/60">Role</label>
                   <input
                     id="role-input"
                     type="text"
                     placeholder="Senior Engineer"
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                    className="w-full rounded-lg border border-ink/10 bg-ink/5 px-3 py-2.5 text-sm text-ink placeholder:text-ink/30 focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20"
                   />
                 </div>
               </div>
 
               {/* JD */}
               <div className="mb-4">
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink/60">
                   Job Description
                 </label>
                 <textarea
                   id="jd-textarea"
-                  className="h-36 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 placeholder:text-slate-300 focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                  className="h-36 w-full resize-none rounded-lg border border-ink/10 bg-ink/5 p-3 text-sm text-ink placeholder:text-ink/30 focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20"
                   placeholder="Paste the full job description here…"
                   value={jdText}
                   onChange={(e) => setJdText(e.target.value)}
@@ -576,7 +570,7 @@ export default function Intelligence() {
                 id="analyze-btn"
                 onClick={analyzeAndTailor}
                 disabled={!canAnalyze}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3 text-sm font-semibold text-white shadow-md shadow-emerald-500/25 transition hover:from-emerald-600 hover:to-teal-600 hover:shadow-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-moss py-3 text-sm font-semibold text-white shadow-md shadow-sm transition hover:bg-moss/90  disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
               >
                 {analyzing ? (
                   <><Loader2 size={16} className="animate-spin" /> Analyzing… (30–60 s)</>
@@ -588,14 +582,14 @@ export default function Intelligence() {
 
             {/* ── Step 2: Gap Analysis ── */}
             {analysis && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">2</span>
-                  <h2 className="font-semibold text-slate-800">Gap Analysis</h2>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-moss text-xs font-bold text-white">2</span>
+                  <h2 className="font-semibold text-ink">Gap Analysis</h2>
                 </div>
 
                 {/* Score ring */}
-                <div className="mb-5 flex items-center gap-4 rounded-xl bg-slate-50 p-4">
+                <div className="mb-5 flex items-center gap-4 rounded-lg bg-ink/5 p-4">
                   <div className="relative flex h-20 w-20 shrink-0 items-center justify-center">
                     <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 36 36">
                       <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" strokeWidth="3" />
@@ -610,21 +604,21 @@ export default function Intelligence() {
                     <span className={`text-xl font-bold ${scoreColor}`}>{analysis.match_score}%</span>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Match Score</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink/40">Match Score</p>
                     {analysis.one_line_pitch && (
-                      <p className="mt-1 text-sm italic text-slate-600">{analysis.one_line_pitch}</p>
+                      <p className="mt-1 text-sm italic text-ink/70">{analysis.one_line_pitch}</p>
                     )}
                   </div>
                 </div>
 
                 {/* Matched skills */}
                 <div className="mb-4">
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-moss">
                     <CheckCircle2 size={12} /> Matched ({analysis.matched_skills.length})
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {analysis.matched_skills.map((s, i) => (
-                      <span key={i} className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                      <span key={i} className="rounded-full bg-moss/10 px-2.5 py-0.5 text-xs font-medium text-moss">
                         {s}
                       </span>
                     ))}
@@ -649,31 +643,31 @@ export default function Intelligence() {
 
             {/* ── Step 3: GitHub Project Injection ── */}
             {analysis && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-white">3</span>
-                  <h2 className="font-semibold text-slate-800">GitHub Projects</h2>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-moss/90 text-xs font-bold text-white">3</span>
+                  <h2 className="font-semibold text-ink">GitHub Projects</h2>
                 </div>
-                <p className="mb-3 text-xs text-slate-500">
+                <p className="mb-3 text-xs text-ink/60">
                   Fetch your repos. We'll find which ones cover the missing skills above and inject them as project bullets.
                 </p>
 
                 <div className="mb-3 flex gap-2">
                   <div className="relative flex-1">
-                    <Github size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Github size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
                     <input
                       type="text"
                       placeholder="your-github-username"
                       value={githubUsername}
                       onChange={(e) => setGithubUsername(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && fetchGithubRepos()}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm text-slate-800 placeholder:text-slate-300 focus:border-slate-400 focus:bg-white focus:outline-none"
+                      className="w-full rounded-lg border border-ink/10 bg-ink/5 py-2 pl-8 pr-3 text-sm text-ink placeholder:text-ink/30 focus:border-ink/30 focus:bg-white focus:outline-none"
                     />
                   </div>
                   <button
                     onClick={fetchGithubRepos}
                     disabled={!githubUsername.trim() || fetchingRepos}
-                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-ink/5 px-3 py-2 text-sm font-medium text-ink/80 hover:bg-ink/10 disabled:opacity-50"
                   >
                     {fetchingRepos ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                     Fetch
@@ -685,7 +679,7 @@ export default function Intelligence() {
                 )}
 
                 {githubRepos.length > 0 && (
-                  <p className="mb-3 text-xs text-slate-500">
+                  <p className="mb-3 text-xs text-ink/60">
                     {githubRepos.length} repos fetched. {skillProjects.length} match missing skills.
                   </p>
                 )}
@@ -695,10 +689,10 @@ export default function Intelligence() {
                     {skillProjects.map((sp) => (
                       <label
                         key={sp.repo.id}
-                        className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${
+                        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${
                           selectedProjects.has(sp.repo.name)
-                            ? "border-emerald-400 bg-emerald-50"
-                            : "border-slate-200 bg-white hover:border-slate-300"
+                            ? "border-moss/40 bg-moss/10"
+                            : "border-ink/10 bg-white hover:border-ink/20"
                         }`}
                       >
                         <input
@@ -709,26 +703,26 @@ export default function Intelligence() {
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-800 truncate">{sp.repo.name}</span>
+                            <span className="text-sm font-semibold text-ink truncate">{sp.repo.name}</span>
                             <a
                               href={sp.repo.html_url}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="text-slate-400 hover:text-slate-600"
+                              className="text-ink/40 hover:text-ink/70"
                             >
                               <ExternalLink size={11} />
                             </a>
                           </div>
                           {sp.repo.description && (
-                            <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{sp.repo.description}</p>
+                            <p className="mt-0.5 text-xs text-ink/60 line-clamp-2">{sp.repo.description}</p>
                           )}
                           <div className="mt-1.5 flex items-center gap-2">
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                               fills: {sp.skill}
                             </span>
                             {sp.repo.language && (
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                              <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-medium text-ink/70">
                                 {sp.repo.language}
                               </span>
                             )}
@@ -740,14 +734,14 @@ export default function Intelligence() {
                     <button
                       onClick={injectSelectedProjects}
                       disabled={!selectedProjects.size}
-                      className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-40"
+                      className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-moss py-2.5 text-sm font-semibold text-white transition hover:bg-moss/90 disabled:opacity-40"
                     >
                       <Zap size={14} />
                       Inject {selectedProjects.size > 0 ? selectedProjects.size : ""} Project{selectedProjects.size !== 1 ? "s" : ""} into Resume
                     </button>
 
                     {projectsAdded && (
-                      <p className="text-center text-xs text-emerald-600">
+                      <p className="text-center text-xs text-moss">
                         ✓ Projects added to Experience Bullets section
                       </p>
                     )}
@@ -755,7 +749,7 @@ export default function Intelligence() {
                 )}
 
                 {githubRepos.length > 0 && skillProjects.length === 0 && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-400">
+                  <div className="rounded-lg border border-ink/10 bg-ink/5 p-4 text-center text-xs text-ink/40">
                     <Code2 size={20} className="mx-auto mb-2 opacity-40" />
                     No repos matched the missing skills. Add projects covering: {analysis.missing_keywords.slice(0, 3).join(", ")}…
                   </div>
@@ -768,20 +762,20 @@ export default function Intelligence() {
                RIGHT PANEL — Live Resume Editor / Preview
           ══════════════════════════════════════════════════════ */}
           <div className="flex flex-col">
-            <div className="sticky top-4 flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm" style={{ minHeight: "80vh" }}>
+            <div className="sticky top-4 flex flex-col rounded-lg border border-ink/10 bg-white shadow-sm" style={{ minHeight: "80vh" }}>
               {/* Tabs */}
-              <div className="flex items-center gap-1 border-b border-slate-200 px-5 pt-4">
+              <div className="flex items-center gap-1 border-b border-ink/10 px-5 pt-4">
                 <button
                   onClick={() => setActiveTab("editor")}
                   className={`flex items-center gap-1.5 rounded-t-lg px-4 py-2 text-sm font-medium transition ${
                     activeTab === "editor"
-                      ? "border-b-2 border-emerald-500 text-emerald-600"
-                      : "text-slate-500 hover:text-slate-700"
+                      ? "border-b-2 border-moss/50 text-moss"
+                      : "text-ink/60 hover:text-ink/80"
                   }`}
                 >
                   <Wand2 size={14} /> AI Editor
                   {tailoredContent && (
-                    <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                    <span className="ml-1 rounded-full bg-moss/20 px-1.5 py-0.5 text-[10px] font-bold text-moss">
                       LIVE
                     </span>
                   )}
@@ -790,13 +784,13 @@ export default function Intelligence() {
                   onClick={() => setActiveTab("preview")}
                   className={`flex items-center gap-1.5 rounded-t-lg px-4 py-2 text-sm font-medium transition ${
                     activeTab === "preview"
-                      ? "border-b-2 border-emerald-500 text-emerald-600"
-                      : "text-slate-500 hover:text-slate-700"
+                      ? "border-b-2 border-moss/50 text-moss"
+                      : "text-ink/60 hover:text-ink/80"
                   }`}
                 >
                   <FileText size={14} /> Base Resume
                   {selectedResume && (
-                    <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                    <span className="ml-1 rounded-full bg-ink/10 px-1.5 py-0.5 text-[10px] font-medium text-ink/70">
                       {selectedResume.original_filename.split(".")[0].slice(0, 12)}
                     </span>
                   )}
@@ -805,7 +799,7 @@ export default function Intelligence() {
                   <button
                     onClick={downloadDocx}
                     disabled={downloading}
-                    className="ml-auto flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:opacity-50"
+                    className="ml-auto flex items-center gap-1.5 rounded-lg bg-moss px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-moss/90 disabled:opacity-50"
                   >
                     {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
                     Export DOCX
@@ -821,27 +815,27 @@ export default function Intelligence() {
                       {/* Summary */}
                       <div>
                         <div className="mb-2 flex items-center gap-2">
-                          <Target size={14} className="text-emerald-500" />
-                          <label className="text-sm font-semibold text-slate-800">
+                          <Target size={14} className="text-moss" />
+                          <label className="text-sm font-semibold text-ink">
                             Professional Summary
-                            <span className="ml-2 text-xs font-normal text-emerald-600">(AI-tailored · editable)</span>
+                            <span className="ml-2 text-xs font-normal text-moss">(AI-tailored · editable)</span>
                           </label>
                         </div>
                         <textarea
                           id="summary-editor"
                           value={editedSummary}
                           onChange={(e) => setEditedSummary(e.target.value)}
-                          className="h-32 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-relaxed text-slate-800 transition focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                          className="h-32 w-full resize-none rounded-lg border border-ink/10 bg-ink/5 p-3 text-sm leading-relaxed text-ink transition focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20"
                         />
                       </div>
 
                       {/* Bullets */}
                       <div>
                         <div className="mb-3 flex items-center gap-2">
-                          <Sparkles size={14} className="text-emerald-500" />
-                          <label className="text-sm font-semibold text-slate-800">
+                          <Sparkles size={14} className="text-moss" />
+                          <label className="text-sm font-semibold text-ink">
                             Experience &amp; Project Bullets
-                            <span className="ml-2 text-xs font-normal text-slate-400">
+                            <span className="ml-2 text-xs font-normal text-ink/40">
                               {editedBullets.length} bullet{editedBullets.length !== 1 ? "s" : ""}
                             </span>
                           </label>
@@ -850,23 +844,23 @@ export default function Intelligence() {
                           {editedBullets.map((bullet, idx) => (
                             <div key={idx} className="group relative">
                               <div className="flex items-start gap-2">
-                                <span className="mt-3.5 shrink-0 text-emerald-400">•</span>
+                                <span className="mt-3.5 shrink-0 text-moss/80">•</span>
                                 <textarea
                                   id={`bullet-editor-${idx}`}
                                   value={bullet.rewritten}
                                   onChange={(e) => handleBulletChange(idx, e.target.value)}
-                                  className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-relaxed text-slate-800 transition focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+                                  className="flex-1 resize-none rounded-lg border border-ink/10 bg-ink/5 p-3 text-sm leading-relaxed text-ink transition focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20"
                                   rows={2}
                                 />
                                 <button
                                   onClick={() => removeBullet(idx)}
-                                  className="mt-3 shrink-0 rounded-md p-1 text-slate-300 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                                  className="mt-3 shrink-0 rounded-md p-1 text-ink/30 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
                                 >
                                   <X size={13} />
                                 </button>
                               </div>
                               {bullet.original === "" && (
-                                <span className="ml-5 text-[10px] font-semibold text-emerald-500">
+                                <span className="ml-5 text-[10px] font-semibold text-moss">
                                   ✦ GitHub project injected
                                 </span>
                               )}
@@ -880,7 +874,7 @@ export default function Intelligence() {
                         <div>
                           <div className="mb-2 flex items-center gap-2">
                             <Zap size={14} className="text-amber-500" />
-                            <label className="text-sm font-semibold text-slate-800">Suggested Skills to Add</label>
+                            <label className="text-sm font-semibold text-ink">Suggested Skills to Add</label>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {tailoredContent.skills_to_add.map((s, i) => (
@@ -896,10 +890,10 @@ export default function Intelligence() {
                       {tailoredContent.cover_letter_opening && (
                         <div>
                           <div className="mb-2 flex items-center gap-2">
-                            <FileText size={14} className="text-slate-500" />
-                            <label className="text-sm font-semibold text-slate-800">Cover Letter Opening</label>
+                            <FileText size={14} className="text-ink/60" />
+                            <label className="text-sm font-semibold text-ink">Cover Letter Opening</label>
                           </div>
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm italic leading-relaxed text-slate-600">
+                          <div className="rounded-lg border border-ink/10 bg-ink/5 p-4 text-sm italic leading-relaxed text-ink/70">
                             {tailoredContent.cover_letter_opening}
                           </div>
                         </div>
@@ -911,28 +905,28 @@ export default function Intelligence() {
                         {analyzing ? (
                           <div className="mx-auto w-full max-w-md space-y-5 text-left">
                             <div className="flex items-center justify-center mb-8">
-                              <Loader2 className="mr-3 animate-spin text-emerald-500" size={24} />
+                              <Loader2 className="mr-3 animate-spin text-moss" size={24} />
                               <div className="text-center">
-                                <span className="block text-sm font-semibold text-emerald-600">AI is tailoring your resume</span>
-                                <span className="text-xs text-slate-400">Evaluating gap analysis against JD…</span>
+                                <span className="block text-sm font-semibold text-moss">AI is tailoring your resume</span>
+                                <span className="text-xs text-ink/40">Evaluating gap analysis against JD…</span>
                               </div>
                             </div>
-                            <div className="h-4 w-1/3 animate-pulse rounded bg-slate-200" />
-                            <div className="h-28 w-full animate-pulse rounded-xl bg-slate-100" />
-                            <div className="mt-8 h-4 w-1/4 animate-pulse rounded bg-slate-200" />
+                            <div className="h-4 w-1/3 animate-pulse rounded bg-ink/20" />
+                            <div className="h-28 w-full animate-pulse rounded-lg bg-ink/10" />
+                            <div className="mt-8 h-4 w-1/4 animate-pulse rounded bg-ink/20" />
                             <div className="space-y-3">
-                              <div className="h-12 w-full animate-pulse rounded-lg bg-slate-100" />
-                              <div className="h-12 w-full animate-pulse rounded-lg bg-slate-100" />
-                              <div className="h-12 w-4/5 animate-pulse rounded-lg bg-slate-100" />
+                              <div className="h-12 w-full animate-pulse rounded-lg bg-ink/10" />
+                              <div className="h-12 w-full animate-pulse rounded-lg bg-ink/10" />
+                              <div className="h-12 w-4/5 animate-pulse rounded-lg bg-ink/10" />
                             </div>
                           </div>
                         ) : (
                           <>
-                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
-                              <Wand2 className="text-slate-400" size={28} />
+                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg bg-ink/10">
+                              <Wand2 className="text-ink/40" size={28} />
                             </div>
-                            <p className="text-sm font-medium text-slate-600">No content yet</p>
-                            <p className="mt-1 text-xs text-slate-400">
+                            <p className="text-sm font-medium text-ink/70">No content yet</p>
+                            <p className="mt-1 text-xs text-ink/40">
                               Select a resume, paste a JD, and hit Analyze
                             </p>
                           </>
@@ -948,7 +942,7 @@ export default function Intelligence() {
                 <div className="flex-1 overflow-y-auto p-5">
                   {selectedResume ? (
                     <div className="space-y-3">
-                      <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
+                      <div className="mb-4 rounded-lg border border-moss/20 bg-moss/10 px-4 py-3 text-xs text-moss">
                         <strong>Base template:</strong> {selectedResume.original_filename} — this content is preserved as-is. AI tailoring adds to it, not replaces it.
                       </div>
                       {resumeSections.length > 0 ? (
@@ -961,10 +955,10 @@ export default function Intelligence() {
                           return (
                             <div
                               key={i}
-                              className={`overflow-hidden rounded-xl border transition ${
+                              className={`overflow-hidden rounded-lg border transition ${
                                 hasAiChanges
-                                  ? "border-emerald-200 bg-emerald-50/50"
-                                  : "border-slate-200 bg-white"
+                                  ? "border-moss/20 bg-moss/10/50"
+                                  : "border-ink/10 bg-white"
                               }`}
                             >
                               <button
@@ -972,39 +966,39 @@ export default function Intelligence() {
                                 onClick={() => setExpandedSection(isOpen ? null : section.heading)}
                               >
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold text-slate-800">
+                                  <span className="text-sm font-semibold text-ink">
                                     {section.heading}
                                   </span>
                                   {hasAiChanges && (
-                                    <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                    <span className="rounded-full bg-moss px-2 py-0.5 text-[10px] font-bold text-white">
                                       AI ENHANCED
                                     </span>
                                   )}
                                 </div>
                                 {isOpen ? (
-                                  <ChevronDown size={14} className="text-slate-400" />
+                                  <ChevronDown size={14} className="text-ink/40" />
                                 ) : (
-                                  <ChevronRight size={14} className="text-slate-400" />
+                                  <ChevronRight size={14} className="text-ink/40" />
                                 )}
                               </button>
                               {isOpen && (
                                 <div className="border-t border-slate-100 px-4 pb-4 pt-3">
-                                  <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-slate-600">
+                                  <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-ink/70">
                                     {section.content.trim()}
                                   </pre>
                                   {hasAiChanges && editedBullets.length > 0 && (
-                                    <div className="mt-3 border-t border-emerald-200 pt-3">
-                                      <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+                                    <div className="mt-3 border-t border-moss/20 pt-3">
+                                      <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-moss">
                                         ✦ AI-Added Bullets
                                       </p>
                                       <div className="space-y-1.5">
                                         {editedBullets.slice(0, 3).map((b, bi) => (
-                                          <p key={bi} className="text-xs leading-relaxed text-emerald-700">
+                                          <p key={bi} className="text-xs leading-relaxed text-moss">
                                             • {b.rewritten}
                                           </p>
                                         ))}
                                         {editedBullets.length > 3 && (
-                                          <p className="text-xs text-emerald-500">
+                                          <p className="text-xs text-moss">
                                             +{editedBullets.length - 3} more in Editor tab
                                           </p>
                                         )}
@@ -1017,7 +1011,7 @@ export default function Intelligence() {
                           );
                         })
                       ) : (
-                        <pre className="rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-600 whitespace-pre-wrap">
+                        <pre className="rounded-lg bg-ink/5 p-4 text-xs leading-relaxed text-ink/70 whitespace-pre-wrap">
                           {selectedResume.markdown_content}
                         </pre>
                       )}
@@ -1026,7 +1020,7 @@ export default function Intelligence() {
                     <div className="flex h-full items-center justify-center">
                       <div className="text-center">
                         <FileText className="mx-auto mb-3 text-slate-200" size={36} />
-                        <p className="text-sm text-slate-400">Select a resume to preview</p>
+                        <p className="text-sm text-ink/40">Select a resume to preview</p>
                       </div>
                     </div>
                   )}
