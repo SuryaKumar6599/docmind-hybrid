@@ -17,21 +17,26 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def push_url_to_supabase(url: str):
-    """Pushes the tunnel URL to Supabase 'documents' table as a config entry."""
+    """Pushes the tunnel URL to a public Supabase storage bucket."""
     print(f"Pushing Tunnel URL to Supabase: {url}")
-    # Check if config document exists
-    res = supabase.table("documents").select("id").eq("name", "__DOCMIND_API_CONFIG__").execute()
-    if res.data and len(res.data) > 0:
-        doc_id = res.data[0]["id"]
-        supabase.table("documents").update({
-            "metadata": {"api_url": url}
-        }).eq("id", doc_id).execute()
-    else:
-        supabase.table("documents").insert({
-            "name": "__DOCMIND_API_CONFIG__",
-            "category": "system",
-            "metadata": {"api_url": url}
-        }).execute()
+    bucket_name = "docmind-config"
+    file_name = "api_url.json"
+    
+    # Ensure bucket exists and is public
+    try:
+        supabase.storage.create_bucket(bucket_name, options={"public": True})
+    except Exception:
+        pass # Bucket might already exist
+        
+    try:
+        supabase.storage.from_(bucket_name).remove([file_name])
+    except Exception:
+        pass
+        
+    import json
+    data = json.dumps({"api_url": url}).encode("utf-8")
+    supabase.storage.from_(bucket_name).upload(file_name, data)
+    print("✅ Successfully pushed to public config bucket!")
 
 def main():
     print("Starting Cloudflare Quick Tunnel...")

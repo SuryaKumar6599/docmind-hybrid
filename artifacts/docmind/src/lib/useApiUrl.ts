@@ -20,20 +20,26 @@ export function useApiUrl() {
       return;
     }
 
-    // 2. Fetch from Supabase (automated Cloudflare tunnel script sets this)
+    // 2. Fetch from Supabase public config bucket (automated Cloudflare tunnel script sets this)
     if (supabase) {
-      supabase
-        .from("documents")
-        .select("metadata")
-        .eq("name", "__DOCMIND_API_CONFIG__")
-        .single()
-        .then(({ data }) => {
-          if (data?.metadata?.api_url) {
-            cachedApiUrl = data.metadata.api_url.replace(/\/+$/, "");
-            setApiUrl(cachedApiUrl);
-          }
-        })
-        .catch(console.error);
+      const { data } = supabase.storage.from("docmind-config").getPublicUrl("api_url.json");
+      if (data?.publicUrl) {
+        // Fetch the JSON from the public URL
+        fetch(data.publicUrl, { cache: "no-store" })
+          .then((res) => {
+            if (!res.ok) throw new Error("Config not found");
+            return res.json();
+          })
+          .then((config) => {
+            if (config?.api_url) {
+              cachedApiUrl = config.api_url.replace(/\/+$/, "");
+              setApiUrl(cachedApiUrl);
+            }
+          })
+          .catch((err) => {
+            console.error("Failed to fetch dynamic API URL:", err);
+          });
+      }
     }
   }, []);
 
