@@ -70,7 +70,9 @@ export interface RewrittenBullet {
   original: string;
   rewritten: string;
   priority: number;
+  is_github_injection?: boolean;
 }
+
 
 export interface Stage2Content {
   tailored_summary: string;

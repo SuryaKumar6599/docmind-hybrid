@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle,
   ArrowRight,
@@ -465,17 +466,19 @@ export default function Intelligence() {
       : "bg-red-500";
 
   return (
-    <div className="min-h-screen py-8">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        {/* ── Header ── */}
-        <header className="mb-6 border-b border-ink/10 pb-5">
+    <div className="min-h-screen pb-8">
+      {/* ── Header (Sticky Glassmorphic) ── */}
+      <header className="sticky top-0 z-20 mb-6 border-b border-ink/10 bg-[#f7f4ed]/80 pb-5 pt-8 backdrop-blur-md">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <p className="text-sm font-semibold text-moss">DocMind</p>
           <h1 className="mt-1 text-3xl font-semibold text-ink">Resume Intelligence</h1>
           <p className="mt-1 text-sm text-ink/60">
             AI-powered gap analysis · GitHub project injection · Live editing
           </p>
-        </header>
+        </div>
+      </header>
 
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
         {/* ── Errors ── */}
         {error && (
           <div className="mb-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -807,208 +810,251 @@ export default function Intelligence() {
                 )}
               </div>
 
-              {/* ── EDITOR TAB ── */}
-              {activeTab === "editor" && (
-                <div className="flex-1 overflow-y-auto p-5">
-                  {tailoredContent ? (
-                    <div className="space-y-6">
-                      {/* Summary */}
-                      <div>
-                        <div className="mb-2 flex items-center gap-2">
-                          <Target size={14} className="text-moss" />
-                          <label className="text-sm font-semibold text-ink">
-                            Professional Summary
-                            <span className="ml-2 text-xs font-normal text-moss">(AI-tailored · editable)</span>
-                          </label>
+              <AnimatePresence mode="wait">
+                {/* ── EDITOR TAB ── */}
+                {activeTab === "editor" && (
+                  <motion.div 
+                    key="editor"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex-1 overflow-y-auto p-5"
+                  >
+                    {tailoredContent ? (
+                      <div className="space-y-6">
+                        {/* Summary */}
+                        <div>
+                          <div className="mb-2 flex items-center gap-2">
+                            <Target size={14} className="text-moss" />
+                            <label className="text-sm font-semibold text-ink">
+                              Professional Summary
+                            </label>
+                          </div>
+                          <textarea
+                            value={editedSummary}
+                            onChange={(e) => setEditedSummary(e.target.value)}
+                            className="h-32 w-full resize-y rounded-lg border border-ink/10 bg-white p-3 text-sm leading-relaxed text-ink shadow-sm focus:border-moss/40 focus:outline-none focus:ring-1 focus:ring-moss/40"
+                          />
                         </div>
-                        <textarea
-                          id="summary-editor"
-                          value={editedSummary}
-                          onChange={(e) => setEditedSummary(e.target.value)}
-                          className="h-32 w-full resize-none rounded-lg border border-ink/10 bg-ink/5 p-3 text-sm leading-relaxed text-ink transition focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20"
-                        />
-                      </div>
 
-                      {/* Bullets */}
-                      <div>
-                        <div className="mb-3 flex items-center gap-2">
-                          <Sparkles size={14} className="text-moss" />
-                          <label className="text-sm font-semibold text-ink">
-                            Experience &amp; Project Bullets
-                            <span className="ml-2 text-xs font-normal text-ink/40">
-                              {editedBullets.length} bullet{editedBullets.length !== 1 ? "s" : ""}
-                            </span>
-                          </label>
-                        </div>
-                        <div className="space-y-2.5">
-                          {editedBullets.map((bullet, idx) => (
-                            <div key={idx} className="group relative">
-                              <div className="flex items-start gap-2">
-                                <span className="mt-3.5 shrink-0 text-moss/80">•</span>
-                                <textarea
-                                  id={`bullet-editor-${idx}`}
-                                  value={bullet.rewritten}
-                                  onChange={(e) => handleBulletChange(idx, e.target.value)}
-                                  className="flex-1 resize-none rounded-lg border border-ink/10 bg-ink/5 p-3 text-sm leading-relaxed text-ink transition focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20"
-                                  rows={2}
-                                />
-                                <button
-                                  onClick={() => removeBullet(idx)}
-                                  className="mt-3 shrink-0 rounded-md p-1 text-ink/30 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                        {/* Bullets */}
+                        <div>
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 size={14} className="text-moss" />
+                              <label className="text-sm font-semibold text-ink">
+                                Enhanced Bullets
+                              </label>
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            <AnimatePresence initial={false}>
+                              {editedBullets.map((bullet, idx) => (
+                                <motion.div
+                                  key={idx}
+                                  initial={{ opacity: 0, height: 0, y: -10 }}
+                                  animate={{ opacity: 1, height: "auto", y: 0 }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  className="group relative flex flex-col gap-2 rounded-lg border border-ink/10 bg-white p-3 shadow-sm transition-colors hover:border-moss/30"
                                 >
-                                  <X size={13} />
-                                </button>
-                              </div>
-                              {bullet.original === "" && (
-                                <span className="ml-5 text-[10px] font-semibold text-moss">
-                                  ✦ GitHub project injected
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Skills to add */}
-                      {tailoredContent.skills_to_add?.length > 0 && (
-                        <div>
-                          <div className="mb-2 flex items-center gap-2">
-                            <Zap size={14} className="text-amber-500" />
-                            <label className="text-sm font-semibold text-ink">Suggested Skills to Add</label>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {tailoredContent.skills_to_add.map((s, i) => (
-                              <span key={i} className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                                + {s}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Cover letter opener */}
-                      {tailoredContent.cover_letter_opening && (
-                        <div>
-                          <div className="mb-2 flex items-center gap-2">
-                            <FileText size={14} className="text-ink/60" />
-                            <label className="text-sm font-semibold text-ink">Cover Letter Opening</label>
-                          </div>
-                          <div className="rounded-lg border border-ink/10 bg-ink/5 p-4 text-sm italic leading-relaxed text-ink/70">
-                            {tailoredContent.cover_letter_opening}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex h-full items-center justify-center">
-                      <div className="text-center">
-                        {analyzing ? (
-                          <div className="mx-auto w-full max-w-md space-y-5 text-left">
-                            <div className="flex items-center justify-center mb-8">
-                              <Loader2 className="mr-3 animate-spin text-moss" size={24} />
-                              <div className="text-center">
-                                <span className="block text-sm font-semibold text-moss">AI is tailoring your resume</span>
-                                <span className="text-xs text-ink/40">Evaluating gap analysis against JD…</span>
-                              </div>
-                            </div>
-                            <div className="h-4 w-1/3 animate-pulse rounded bg-ink/20" />
-                            <div className="h-28 w-full animate-pulse rounded-lg bg-ink/10" />
-                            <div className="mt-8 h-4 w-1/4 animate-pulse rounded bg-ink/20" />
-                            <div className="space-y-3">
-                              <div className="h-12 w-full animate-pulse rounded-lg bg-ink/10" />
-                              <div className="h-12 w-full animate-pulse rounded-lg bg-ink/10" />
-                              <div className="h-12 w-4/5 animate-pulse rounded-lg bg-ink/10" />
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg bg-ink/10">
-                              <Wand2 className="text-ink/40" size={28} />
-                            </div>
-                            <p className="text-sm font-medium text-ink/70">No content yet</p>
-                            <p className="mt-1 text-xs text-ink/40">
-                              Select a resume, paste a JD, and hit Analyze
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── PREVIEW TAB — Base resume sections ── */}
-              {activeTab === "preview" && (
-                <div className="flex-1 overflow-y-auto p-5">
-                  {selectedResume ? (
-                    <div className="space-y-3">
-                      <div className="mb-4 rounded-lg border border-moss/20 bg-moss/10 px-4 py-3 text-xs text-moss">
-                        <strong>Base template:</strong> {selectedResume.original_filename} — this content is preserved as-is. AI tailoring adds to it, not replaces it.
-                      </div>
-                      {resumeSections.length > 0 ? (
-                        resumeSections.map((section, i) => {
-                          const isOpen = expandedSection === section.heading;
-                          const hasAiChanges =
-                            tailoredContent &&
-                            (section.isExperience || section.isProjects);
-
-                          return (
-                            <div
-                              key={i}
-                              className={`overflow-hidden rounded-lg border transition ${
-                                hasAiChanges
-                                  ? "border-moss/20 bg-moss/10/50"
-                                  : "border-ink/10 bg-white"
-                              }`}
-                            >
-                              <button
-                                className="flex w-full items-center justify-between px-4 py-3 text-left"
-                                onClick={() => setExpandedSection(isOpen ? null : section.heading)}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold text-ink">
-                                    {section.heading}
-                                  </span>
-                                  {hasAiChanges && (
-                                    <span className="rounded-full bg-moss px-2 py-0.5 text-[10px] font-bold text-white">
-                                      AI ENHANCED
-                                    </span>
-                                  )}
-                                </div>
-                                {isOpen ? (
-                                  <ChevronDown size={14} className="text-ink/40" />
-                                ) : (
-                                  <ChevronRight size={14} className="text-ink/40" />
-                                )}
-                              </button>
-                              {isOpen && (
-                                <div className="border-t border-slate-100 px-4 pb-4 pt-3">
-                                  <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-ink/70">
-                                    {section.content.trim()}
-                                  </pre>
-                                  {hasAiChanges && editedBullets.length > 0 && (
-                                    <div className="mt-3 border-t border-moss/20 pt-3">
-                                      <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-moss">
-                                        ✦ AI-Added Bullets
-                                      </p>
-                                      <div className="space-y-1.5">
-                                        {editedBullets.slice(0, 3).map((b, bi) => (
-                                          <p key={bi} className="text-xs leading-relaxed text-moss">
-                                            • {b.rewritten}
-                                          </p>
-                                        ))}
-                                        {editedBullets.length > 3 && (
-                                          <p className="text-xs text-moss">
-                                            +{editedBullets.length - 3} more in Editor tab
-                                          </p>
-                                        )}
-                                      </div>
+                                  {bullet.is_github_injection && (
+                                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-moss">
+                                      <Github size={12} />
+                                      ✦ GitHub project injected
                                     </div>
                                   )}
-                                </div>
-                              )}
+                                  <textarea
+                                    value={bullet.rewritten}
+                                    onChange={(e) => handleBulletChange(idx, e.target.value)}
+                                    className={`w-full resize-y bg-transparent text-sm leading-relaxed text-ink outline-none ${
+                                      bullet.is_github_injection ? "font-medium" : ""
+                                    }`}
+                                    rows={Math.max(2, bullet.rewritten.split("\n").length)}
+                                  />
+                                  <button
+                                    onClick={() => removeBullet(idx)}
+                                    className="absolute right-2 top-2 rounded p-1 text-ink/30 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </motion.div>
+                              ))}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+
+                        {/* Skills to add */}
+                        {tailoredContent.skills_to_add?.length > 0 && (
+                          <div>
+                            <div className="mb-2 flex items-center gap-2">
+                              <Zap size={14} className="text-amber-500" />
+                              <label className="text-sm font-semibold text-ink">Skills to Add</label>
                             </div>
-                          );
+                            <div className="flex flex-wrap gap-2">
+                              {tailoredContent.skills_to_add.map((s, i) => (
+                                <span key={i} className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                                  + {s}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cover letter opener */}
+                        {tailoredContent.cover_letter_opening && (
+                          <div>
+                            <div className="mb-2 flex items-center gap-2">
+                              <FileText size={14} className="text-ink/60" />
+                              <label className="text-sm font-semibold text-ink">Cover Letter Opening</label>
+                            </div>
+                            <div className="rounded-lg border border-ink/10 bg-ink/5 p-4 text-sm italic leading-relaxed text-ink/70">
+                              {tailoredContent.cover_letter_opening}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="text-center">
+                          {analyzing ? (
+                            <motion.div 
+                              initial={{ opacity: 0 }} 
+                              animate={{ opacity: 1 }} 
+                              className="mx-auto w-full max-w-md space-y-5 text-left"
+                            >
+                              <div className="flex items-center justify-center mb-8">
+                                <Loader2 className="mr-3 animate-spin text-moss" size={24} />
+                                <div className="text-center">
+                                  <span className="block text-sm font-semibold text-moss">AI is tailoring your resume</span>
+                                  <motion.span 
+                                    animate={{ opacity: [0.5, 1, 0.5] }} 
+                                    transition={{ repeat: Infinity, duration: 1.5 }}
+                                    className="text-xs text-ink/40"
+                                  >
+                                    Cross-referencing JD and optimizing bullets...
+                                  </motion.span>
+                                </div>
+                              </div>
+                              
+                              {/* Skeleton Layout */}
+                              <motion.div animate={{ opacity: [0.4, 0.7, 0.4] }} transition={{ repeat: Infinity, duration: 2 }}>
+                                <div className="mb-2 h-4 w-1/3 rounded bg-ink/10" />
+                                <div className="h-24 w-full rounded-lg bg-ink/5" />
+                                <div className="mt-8 mb-3 h-4 w-1/4 rounded bg-ink/10" />
+                                <div className="space-y-3">
+                                  <div className="h-16 w-full rounded-lg bg-ink/5" />
+                                  <div className="h-16 w-full rounded-lg bg-ink/5" />
+                                  <div className="h-16 w-4/5 rounded-lg bg-ink/5" />
+                                </div>
+                              </motion.div>
+                            </motion.div>
+                          ) : (
+                            <>
+                              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg bg-ink/10">
+                                <Wand2 className="text-ink/40" size={28} />
+                              </div>
+                              <p className="text-sm font-medium text-ink/70">No content yet</p>
+                              <p className="mt-1 text-xs text-ink/40">
+                                Select a resume, paste a JD, and hit Analyze
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* ── PREVIEW TAB — Base resume sections ── */}
+                {activeTab === "preview" && (
+                  <motion.div 
+                    key="preview"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex-1 overflow-y-auto p-5"
+                  >
+                    {selectedResume ? (
+                      <div className="space-y-3">
+                        <div className="mb-4 rounded-lg border border-moss/20 bg-moss/10 px-4 py-3 text-xs text-moss">
+                          <strong>Base template:</strong> {selectedResume.original_filename} — this content is preserved as-is. AI tailoring adds to it, not replaces it.
+                        </div>
+                        {resumeSections.length > 0 ? (
+                          resumeSections.map((section, i) => {
+                            const isOpen = expandedSection === section.heading;
+                            const hasAiChanges =
+                              tailoredContent &&
+                              (section.isExperience || section.isProjects);
+
+                            return (
+                              <div
+                                key={i}
+                                className={`overflow-hidden rounded-lg border transition ${
+                                  hasAiChanges
+                                    ? "border-moss/20 bg-moss/10/50"
+                                    : "border-ink/10 bg-white"
+                                }`}
+                              >
+                                <button
+                                  className="flex w-full items-center justify-between px-4 py-3 text-left"
+                                  onClick={() => setExpandedSection(isOpen ? null : section.heading)}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-ink">
+                                      {section.heading}
+                                    </span>
+                                    {hasAiChanges && (
+                                      <span className="rounded-full bg-moss px-2 py-0.5 text-[10px] font-bold text-white">
+                                        AI ENHANCED
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isOpen ? (
+                                    <ChevronDown size={14} className="text-ink/40" />
+                                  ) : (
+                                    <ChevronRight size={14} className="text-ink/40" />
+                                  )}
+                                </button>
+                                <AnimatePresence>
+                                  {isOpen && (
+                                    <motion.div 
+                                      initial={{ height: 0 }} 
+                                      animate={{ height: "auto" }} 
+                                      exit={{ height: 0 }} 
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+                                        <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-ink/70">
+                                          {section.content.trim()}
+                                        </pre>
+                                        {hasAiChanges && editedBullets.length > 0 && (
+                                          <div className="mt-3 border-t border-moss/20 pt-3">
+                                            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-moss">
+                                              ✦ AI-Added Bullets
+                                            </p>
+                                            <div className="space-y-1.5">
+                                              {editedBullets.slice(0, 3).map((b, bi) => (
+                                                <p key={bi} className="text-xs leading-relaxed text-moss">
+                                                  • {b.rewritten}
+                                                </p>
+                                              ))}
+                                              {editedBullets.length > 3 && (
+                                                <p className="text-xs text-moss">
+                                                  +{editedBullets.length - 3} more in Editor tab
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            );
+
                         })
                       ) : (
                         <pre className="rounded-lg bg-ink/5 p-4 text-xs leading-relaxed text-ink/70 whitespace-pre-wrap">
@@ -1024,9 +1070,10 @@ export default function Intelligence() {
                       </div>
                     </div>
                   )}
-                </div>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
+          </div>
           </div>
         </div>
       </div>
