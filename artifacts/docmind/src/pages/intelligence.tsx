@@ -156,14 +156,34 @@ function parseResumeSections(markdown: string): ResumeSection[] {
   return sections;
 }
 
+// ── Session State Hook ────────────────────────────────────────────────────────
+function useSessionState<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [state, setState] = useState<T>(() => {
+    try {
+      const item = window.sessionStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(key, JSON.stringify(state));
+    } catch {}
+  }, [key, state]);
+
+  return [state, setState];
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Intelligence() {
   const [resumes, setResumes] = useState<Resume[]>([]);
-  const [selectedResumeId, setSelectedResumeId] = useState<string>("");
-  const [jdText, setJdText] = useState("");
-  const [company, setCompany] = useState("");
-  const [role, setRole] = useState("");
+  const [selectedResumeId, setSelectedResumeId] = useSessionState<string>("docmind_resumeId", "");
+  const [jdText, setJdText] = useSessionState("docmind_jdText", "");
+  const [company, setCompany] = useSessionState("docmind_company", "");
+  const [role, setRole] = useSessionState("docmind_role", "");
 
   const [analyzing, setAnalyzing] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -172,15 +192,15 @@ export default function Intelligence() {
   const isConfigured = Boolean(API_URL) && isSupabaseConfigured;
   const [error, setError] = useState<string | null>(null);
 
-  const [analysis, setAnalysis] = useState<Stage1Analysis | null>(null);
-  const [tailoredContent, setTailoredContent] = useState<Stage2Content | null>(null);
+  const [analysis, setAnalysis] = useSessionState<Stage1Analysis | null>("docmind_analysis", null);
+  const [tailoredContent, setTailoredContent] = useSessionState<Stage2Content | null>("docmind_tailored", null);
 
-  const [editedSummary, setEditedSummary] = useState("");
-  const [editedBullets, setEditedBullets] = useState<RewrittenBullet[]>([]);
+  const [editedSummary, setEditedSummary] = useSessionState("docmind_summary", "");
+  const [editedBullets, setEditedBullets] = useSessionState<RewrittenBullet[]>("docmind_bullets", []);
 
   // GitHub integration
-  const [githubUsername, setGithubUsername] = useState("");
-  const [githubRepos, setGithubRepos] = useState<GithubRepo[]>([]);
+  const [githubUsername, setGithubUsername] = useSessionState("docmind_githubUsername", "");
+  const [githubRepos, setGithubRepos] = useSessionState<GithubRepo[]>("docmind_githubRepos", []);
   const [fetchingRepos, setFetchingRepos] = useState(false);
   const [repoError, setRepoError] = useState<string | null>(null);
   const [skillProjects, setSkillProjects] = useState<SkillProject[]>([]);
@@ -188,7 +208,7 @@ export default function Intelligence() {
   const [projectsAdded, setProjectsAdded] = useState(false);
 
   // UI state
-  const [activeTab, setActiveTab] = useState<"editor" | "preview">("editor");
+  const [activeTab, setActiveTab] = useSessionState<"editor" | "preview">("docmind_activeTab", "editor");
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const selectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
@@ -267,6 +287,20 @@ export default function Intelligence() {
       return;
     }
 
+    const cacheKey = `ai_cache_${selectedResumeId}_${company.trim()}_${role.trim()}_${jdText.length}`;
+    const cachedStr = window.sessionStorage.getItem(cacheKey);
+    if (cachedStr) {
+      try {
+        const cached = JSON.parse(cachedStr);
+        setAnalysis(cached.analysisData);
+        setTailoredContent(cached.tailoredData);
+        setEditedSummary(cached.tailoredData.tailored_summary);
+        setEditedBullets(cached.tailoredData.rewritten_bullets);
+        setActiveTab("editor");
+        return;
+      } catch (e) {}
+    }
+
     setAnalyzing(true);
     setError(null);
     setAnalysis(null);
@@ -293,6 +327,14 @@ export default function Intelligence() {
       setTailoredContent(tailoredData);
       setEditedSummary(tailoredData.tailored_summary);
       setEditedBullets(tailoredData.rewritten_bullets);
+
+      try {
+        window.sessionStorage.setItem(
+          cacheKey,
+          JSON.stringify({ analysisData, tailoredData })
+        );
+      } catch (e) {}
+
       setActiveTab("editor");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
@@ -410,8 +452,8 @@ export default function Intelligence() {
       : "bg-red-500";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <div className="min-h-screen py-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
         {/* ── Header ── */}
         <header className="mb-8">
           <div className="flex items-center gap-3">
