@@ -220,6 +220,18 @@ export default function Intelligence() {
     if (isSupabaseConfigured) fetchResumes();
   }, []);
 
+  // Warn before closing if there is active work
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (analysis || jdText.length > 50) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [analysis, jdText]);
+
   // Auto-compute skill→project matches when analysis or repos change
   useEffect(() => {
     if (!analysis?.missing_keywords?.length || !githubRepos.length) {
@@ -422,8 +434,9 @@ export default function Intelligence() {
         throw new Error(detail);
       }
       const blob = await res.blob();
+      const dateStr = new Date().toISOString().split("T")[0];
       const safe = company.replace(/\s+/g, "_").replace(/\//g, "-");
-      triggerDownload(blob, `Tailored_Resume_${safe}.docx`);
+      triggerDownload(blob, `Tailored_Resume_${safe}_${dateStr}.docx`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Download failed.");
     } finally {
@@ -896,11 +909,23 @@ export default function Intelligence() {
                     <div className="flex h-full items-center justify-center">
                       <div className="text-center">
                         {analyzing ? (
-                          <>
-                            <Loader2 className="mx-auto mb-3 animate-spin text-emerald-500" size={32} />
-                            <p className="text-sm font-medium text-slate-600">Generating tailored content…</p>
-                            <p className="mt-1 text-xs text-slate-400">This takes 30–60 seconds</p>
-                          </>
+                          <div className="mx-auto w-full max-w-md space-y-5 text-left">
+                            <div className="flex items-center justify-center mb-8">
+                              <Loader2 className="mr-3 animate-spin text-emerald-500" size={24} />
+                              <div className="text-center">
+                                <span className="block text-sm font-semibold text-emerald-600">AI is tailoring your resume</span>
+                                <span className="text-xs text-slate-400">Evaluating gap analysis against JD…</span>
+                              </div>
+                            </div>
+                            <div className="h-4 w-1/3 animate-pulse rounded bg-slate-200" />
+                            <div className="h-28 w-full animate-pulse rounded-xl bg-slate-100" />
+                            <div className="mt-8 h-4 w-1/4 animate-pulse rounded bg-slate-200" />
+                            <div className="space-y-3">
+                              <div className="h-12 w-full animate-pulse rounded-lg bg-slate-100" />
+                              <div className="h-12 w-full animate-pulse rounded-lg bg-slate-100" />
+                              <div className="h-12 w-4/5 animate-pulse rounded-lg bg-slate-100" />
+                            </div>
+                          </div>
                         ) : (
                           <>
                             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
