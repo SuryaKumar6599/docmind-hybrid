@@ -7,39 +7,58 @@ const CONFIG_BUCKET_URL = SUPABASE_URL
 
 let cachedApiUrl: string | null = null;
 
+function cleanApiUrl(url: string | undefined) {
+  return url?.trim().replace(/\/+$/, "") || "";
+}
+
 export function useApiUrl() {
   const [apiUrl, setApiUrl] = useState<string>("");
 
   useEffect(() => {
+    let cancelled = false;
+
     if (cachedApiUrl) {
       setApiUrl(cachedApiUrl);
       return;
     }
 
-    // 1. Env variable (set in Vercel → Settings → Environment Variables)
-    const envUrl = (import.meta.env.VITE_DOCMIND_API_URL as string | undefined)?.replace(/\/+$/, "");
-    if (envUrl) {
-      cachedApiUrl = envUrl;
-      setApiUrl(envUrl);
-      return;
-    }
+    // Fallback only. Vite env values are baked at build time, but Cloudflare
+    // quick-tunnel URLs change at runtime.
+    const envUrl = cleanApiUrl(import.meta.env.VITE_DOCMIND_API_URL as string | undefined);
 
-    // 2. Fetch from public Supabase storage bucket — tunnel_manager.py writes here on startup
-    //    Supabase storage returns Content-Type: text/plain so we parse manually.
+    const useUrl = (url: string) => {
+      if (cancelled || !url) return;
+      cachedApiUrl = url;
+      setApiUrl(url);
+    };
+
+    // 1. Runtime config written by backend/app/tunnel_manager.py on startup.
+    //    This lets the deployed frontend follow changing trycloudflare URLs.
     if (CONFIG_BUCKET_URL) {
       fetch(CONFIG_BUCKET_URL, { cache: "no-store" })
-        .then((res) => res.text())
+        .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
         .then((text) => {
           const config = JSON.parse(text);
-          if (config?.api_url) {
-            cachedApiUrl = (config.api_url as string).replace(/\/+$/, "");
-            setApiUrl(cachedApiUrl);
-          }
+          const dynamicUrl = cleanApiUrl(config?.api_url as string | undefined);
+          useUrl(dynamicUrl || envUrl);
         })
         .catch((err) => {
           console.warn("[DocMind] Could not fetch dynamic API URL from bucket:", err);
+          useUrl(envUrl);
         });
+      return () => {
+        cancelled = true;
+      };
     }
+
+    // 2. Env variable for local/offline setups without Supabase config.
+    if (envUrl) {
+      useUrl(envUrl);
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return apiUrl;
