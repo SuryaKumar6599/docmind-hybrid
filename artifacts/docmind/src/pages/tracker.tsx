@@ -28,8 +28,9 @@ import {
   type Stage2Content,
 } from "../lib/supabase";
 
-const API_URL =
-  (import.meta.env.VITE_DOCMIND_API_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
+import { useApiUrl } from "../lib/useApiUrl";
+
+// Removed static API_URL
 
 // ---------------------------------------------------------------------------
 // Status config
@@ -215,6 +216,7 @@ function QuickSkillsPanel({
   const [trackForm, setTrackForm] = useState({ company: "", role: "", resume_id: resumes[0]?.id ?? "" });
   const [showTrack, setShowTrack] = useState(false);
   const [copiedKeywords, setCopiedKeywords] = useState(false);
+  const API_URL = useApiUrl();
 
   const readyResumes = resumes.filter((r) => r.status === "ready");
 
@@ -821,6 +823,7 @@ export default function Tracker() {
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
+  const API_URL = useApiUrl();
 
   // Backend health probe
   useEffect(() => {
@@ -828,7 +831,7 @@ export default function Tracker() {
     fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(4000) })
       .then((r) => setBackendOnline(r.ok))
       .catch(() => setBackendOnline(false));
-  }, []);
+  }, [API_URL]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setLoading(false); return; }

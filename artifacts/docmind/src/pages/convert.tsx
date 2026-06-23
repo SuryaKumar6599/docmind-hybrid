@@ -15,8 +15,9 @@ import {
   Zap,
 } from "lucide-react";
 
-const API_URL =
-  (import.meta.env.VITE_DOCMIND_API_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
+import { useApiUrl } from "../lib/useApiUrl";
+
+// removed static API_URL
 
 const SUPPORTED_FORMATS = [
   { ext: "PDF", color: "bg-red-100 text-red-700" },
@@ -41,6 +42,8 @@ interface ConvertResult {
 
 export default function Convert() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [apiReady, setApiReady] = useState<boolean | null>(null);
+  const API_URL = useApiUrl();
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -48,7 +51,13 @@ export default function Convert() {
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const apiReady = Boolean(API_URL);
+
+  useEffect(() => {
+    if (!API_URL) return;
+    fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(2000) })
+      .then((r) => setApiReady(r.ok))
+      .catch(() => setApiReady(false));
+  }, [API_URL]);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();

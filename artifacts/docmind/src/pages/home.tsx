@@ -36,12 +36,15 @@ type IndexedDoc = {
   id: string;
 };
 
-const API_URL =
-  (import.meta.env.VITE_DOCMIND_API_URL as string | undefined)?.replace(/\/+$/, "") || "";
+import { useApiUrl } from "../lib/useApiUrl";
+
+// removed static API_URL
 
 export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const API_URL = useApiUrl();
+  const [apiReady, setApiReady] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [question, setQuestion] = useState("");
@@ -52,7 +55,13 @@ export default function Home() {
   });
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
-  const apiReady = useMemo(() => Boolean(API_URL), []);
+
+  useEffect(() => {
+    if (!API_URL) return;
+    fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(2000) })
+      .then((r) => setApiReady(r.ok))
+      .catch(() => setApiReady(false));
+  }, [API_URL]);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();

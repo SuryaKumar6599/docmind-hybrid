@@ -18,8 +18,9 @@ import {
   type RewrittenBullet,
 } from "../lib/supabase";
 
-const API_URL =
-  (import.meta.env.VITE_DOCMIND_API_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
+import { useApiUrl } from "../lib/useApiUrl";
+
+// removed static API_URL
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,10 @@ export default function Intelligence() {
 
   const [analyzing, setAnalyzing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const API_URL = useApiUrl();
+
+  const isConfigured = Boolean(API_URL) && isSupabaseConfigured;
   const [error, setError] = useState<string | null>(null);
 
   const [analysis, setAnalysis] = useState<Stage1Analysis | null>(null);
