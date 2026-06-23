@@ -16,12 +16,12 @@ export PYTHONPATH="$BACKEND_DIR${PYTHONPATH:+:$PYTHONPATH}"
 
 cd "$BACKEND_DIR" || exit 1
 
-if [[ -f "$BACKEND_DIR/.venv/bin/activate" ]]; then
+if [[ -x "$BACKEND_DIR/.venv/bin/python" ]]; then
   # Preferred project virtualenv.
-  source "$BACKEND_DIR/.venv/bin/activate"
-elif [[ -f "$BACKEND_DIR/venv/bin/activate" ]]; then
+  PYTHON_BIN="$BACKEND_DIR/.venv/bin/python"
+elif [[ -x "$BACKEND_DIR/venv/bin/python" ]]; then
   # Backward-compatible fallback for older local setup.
-  source "$BACKEND_DIR/venv/bin/activate"
+  PYTHON_BIN="$BACKEND_DIR/venv/bin/python"
 else
   echo "No Python virtualenv found. Create one with:"
   echo "  cd $BACKEND_DIR && python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r requirements.txt"
@@ -45,17 +45,18 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 echo "[$(date)] Starting DocMind backend stack from $BACKEND_DIR"
+echo "Using Python: $PYTHON_BIN"
 
 echo "Starting FastAPI on http://127.0.0.1:$PORT ..."
-python -m uvicorn app.main:app --host 127.0.0.1 --port "$PORT" >> "$LOG_DIR/backend.log" 2>&1 &
+"$PYTHON_BIN" -m uvicorn app.main:app --host 127.0.0.1 --port "$PORT" >> "$LOG_DIR/backend.log" 2>&1 &
 PIDS+=("$!")
 
 echo "Starting Worker ..."
-python -m app.worker >> "$LOG_DIR/worker.log" 2>&1 &
+"$PYTHON_BIN" -m app.worker >> "$LOG_DIR/worker.log" 2>&1 &
 PIDS+=("$!")
 
 echo "Starting Tunnel Manager ..."
-python -m app.tunnel_manager >> "$LOG_DIR/tunnel.log" 2>&1 &
+"$PYTHON_BIN" -m app.tunnel_manager >> "$LOG_DIR/tunnel.log" 2>&1 &
 PIDS+=("$!")
 
 while true; do

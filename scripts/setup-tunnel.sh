@@ -11,6 +11,36 @@ PLIST_PATH="$HOME/Library/LaunchAgents/com.docmind.backend.plist"
 LABEL="com.docmind.backend"
 UID_VALUE="$(id -u)"
 
+if [[ "$PROJECT_DIR" == "$HOME/Documents/"* ]]; then
+  SAFE_PARENT="$HOME/Projects"
+  SAFE_PROJECT_DIR="$SAFE_PARENT/$(basename "$PROJECT_DIR")"
+
+  echo "This project is inside Documents:"
+  echo "  $PROJECT_DIR"
+  echo ""
+  echo "macOS blocks LaunchAgents from running reliably inside Documents."
+  echo "Moving the project once to:"
+  echo "  $SAFE_PROJECT_DIR"
+  echo ""
+
+  if [[ -e "$SAFE_PROJECT_DIR" ]]; then
+    echo "Cannot auto-move because the target already exists."
+    echo "Use the existing safe copy, or move this project manually:"
+    echo "  cd $HOME"
+    echo "  mkdir -p Projects"
+    echo "  mv \"$PROJECT_DIR\" \"$SAFE_PROJECT_DIR\""
+    echo "  cd \"$SAFE_PROJECT_DIR\""
+    echo "  ./scripts/setup-tunnel.sh"
+    exit 1
+  fi
+
+  mkdir -p "$SAFE_PARENT"
+  mv "$PROJECT_DIR" "$SAFE_PROJECT_DIR"
+  echo "Project moved. Continuing setup from the safe location..."
+  cd "$SAFE_PROJECT_DIR"
+  exec "$SAFE_PROJECT_DIR/scripts/setup-tunnel.sh"
+fi
+
 mkdir -p "$LOG_DIR" "$HOME/Library/LaunchAgents"
 
 echo "DocMind auto-start setup"
@@ -21,6 +51,11 @@ if [[ ! -f "$BACKEND_DIR/.env" ]]; then
   echo "  cp $BACKEND_DIR/.env.example $BACKEND_DIR/.env"
   echo "Then fill SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
   exit 1
+fi
+
+if [[ -f "$BACKEND_DIR/.venv/bin/activate" ]] && grep -q "$HOME/Documents/" "$BACKEND_DIR/.venv/bin/activate"; then
+  echo "Recreating backend virtualenv after project move ..."
+  rm -rf "$BACKEND_DIR/.venv"
 fi
 
 if [[ ! -x "$BACKEND_DIR/.venv/bin/python" ]]; then
@@ -34,13 +69,6 @@ echo "Installing backend Python dependencies ..."
 chmod +x "$BACKEND_DIR/run_daemon.sh"
 xattr -d com.apple.quarantine "$BACKEND_DIR/run_daemon.sh" 2>/dev/null || true
 xattr -d com.apple.quarantine "$PROJECT_DIR/scripts/setup-tunnel.sh" 2>/dev/null || true
-
-if [[ "$PROJECT_DIR" == "$HOME/Documents/"* ]]; then
-  echo ""
-  echo "Note: this project is inside Documents. If launchd logs 'Operation not permitted',"
-  echo "move the repo to a non-protected path like $HOME/Projects/docmind-hybrid and rerun this setup."
-  echo ""
-fi
 
 cat > "$PLIST_PATH" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
