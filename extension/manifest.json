@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "DocMind Web Clipper",
+  "version": "1.0.0",
+  "description": "Instantly clip job descriptions from LinkedIn and Indeed directly into DocMind Intelligence.",
+  "action": {
+    "default_popup": "popup/popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:5173/*",
+    "https://*.vercel.app/*"
+  ]
+}
