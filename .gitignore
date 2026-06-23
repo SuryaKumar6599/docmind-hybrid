@@ -83,3 +83,5 @@ logs/
 
 # Vercel project link (contains project/org IDs — add to GitHub secrets instead)
 .vercel/
+.vercel
+.env*
