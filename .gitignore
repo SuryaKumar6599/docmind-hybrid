@@ -73,3 +73,13 @@ node_modules/
 .env
 .env.local
 .env.*
+
+# Python virtual environments
+venv/
+backend/venv/
+
+# Runtime logs
+logs/
+
+# Vercel project link (contains project/org IDs — add to GitHub secrets instead)
+.vercel/

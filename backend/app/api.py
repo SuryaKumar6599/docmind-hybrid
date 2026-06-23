@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import uuid
 from pathlib import Path
 
 import instructor
@@ -118,13 +119,6 @@ async def root() -> dict[str, object]:
 # ---------------------------------------------------------------------------
 # Index (vector store)
 # ---------------------------------------------------------------------------
-
-class IndexResponse(BaseModel):  # noqa: F811 — shadows models.IndexResponse intentionally
-    document_id: str
-    filename: str
-    chunk_count: int
-    char_count: int
-
 
 @router.post("/index")
 async def index_document(

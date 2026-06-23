@@ -159,11 +159,11 @@ Open the preview pane in Replit, or [http://localhost:5173](http://localhost:517
 
 ### Frontend: Vercel (recommended)
 
-The Vite React frontend is a fully static SPA — it deploys to Vercel in seconds.
+The Vite React frontend is a fully static SPA — deploy it once and forget it.
 
 ```bash
 cd artifacts/docmind
-vercel deploy
+npx vercel deploy --prod
 ```
 
 In the Vercel dashboard → **Settings → Environment Variables**, add:
@@ -172,41 +172,69 @@ In the Vercel dashboard → **Settings → Environment Variables**, add:
 |----------|-------|
 | `VITE_SUPABASE_URL` | `https://your-project.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
-| `VITE_DOCMIND_API_URL` | URL to your running FastAPI backend (see below) |
-
-> **Note:** The Intelligence UI (`/intelligence`) calls `/generate-tailored` and `/export-docx` synchronously. These endpoints require a **persistent** backend — they cannot run in a serverless environment that lacks GPU access.
+| `VITE_DOCMIND_API_URL` | Your permanent tunnel URL (see backend setup below) |
 
 ---
 
-### Frontend: Replit
+### Backend: Auto-start on Mac Boot (Recommended — Zero Manual Effort)
 
-1. Set the three `VITE_*` secrets in **Replit Secrets**
-2. Click **Deploy** in the Replit header
-3. Your app is live at `https://your-app.replit.app`
+The backend runs Ollama locally for free, open-source inference. A one-time setup script creates a **permanent Cloudflare Tunnel** (stable URL that never changes) and installs a **macOS LaunchAgent** so everything auto-starts on boot.
+
+**Run once:**
+
+```bash
+chmod +x scripts/setup-tunnel.sh
+./scripts/setup-tunnel.sh
+```
+
+This script will:
+1. Open a browser to log you into Cloudflare (free account)
+2. Create a named tunnel `docmind-api` with a **permanent stable URL** like `https://<uuid>.cfargotunnel.com`
+3. Install a macOS LaunchAgent that starts FastAPI + worker + tunnel automatically on every boot
+4. Print the exact `VITE_DOCMIND_API_URL` value to paste into Vercel
+
+**After setup:**
+- Copy the printed URL → paste into Vercel as `VITE_DOCMIND_API_URL`
+- Redeploy Vercel (`npx vercel deploy --prod`)
+- The "Local backend unreachable" banner will be gone permanently
+
+**Logs** (for debugging):
+```bash
+tail -f logs/backend.log    # FastAPI uvicorn
+tail -f logs/worker.log     # background Supabase worker
+tail -f logs/tunnel.log     # cloudflared tunnel
+```
+
+**LaunchAgent management:**
+```bash
+# Stop everything
+launchctl unload ~/Library/LaunchAgents/com.docmind.backend.plist
+
+# Start everything (or just reboot)
+launchctl load -w ~/Library/LaunchAgents/com.docmind.backend.plist
+```
 
 ---
 
-### Backend: Options
-
-The FastAPI backend requires Ollama (GPU preferred). Choose one of:
+### Backend: Other Options
 
 | Option | Setup | Notes |
 |--------|-------|-------|
-| **Local Mac + Cloudflare Tunnel** | `cloudflared tunnel --url http://localhost:8000` | Free, zero-latency, easiest |
-| **Render** (free tier) | Push to GitHub → connect to Render as a web service, set `PORT=8000` | No GPU on free tier — Ollama may be slow |
-| **Railway** | Deploy from GitHub, add env vars in Railway dashboard | GPU plans available |
-| **Self-hosted VPS** | Run `uvicorn app.main:app --host 0.0.0.0 --port 8000` + `python -m app.worker` | Full control, best for production |
+| **Auto Mac + Named Tunnel** *(above)* | `./scripts/setup-tunnel.sh` | ✅ Recommended — zero manual effort |
+| **Render** | Push to GitHub → Render web service, set `PORT=8000` | No GPU on free tier — Ollama slow |
+| **Railway** | Deploy from GitHub, GPU plans available | ~$5/month for GPU |
+| **Self-hosted VPS** | `uvicorn app.main:app --host 0.0.0.0 --port 8000` | Full control, best for production |
 
-For any hosted backend, set these environment variables on the server:
+For any hosted backend, set:
 
 ```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-OLLAMA_BASE_URL=http://localhost:11434   # or remote Ollama URL
+OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_CHAT_MODEL=qwen2.5:7b
 OLLAMA_VISION_MODEL=qwen2.5vl:7b
 OLLAMA_EMBED_MODEL=nomic-embed-text
-DOCMIND_CORS_ORIGINS=https://your-app.vercel.app,https://your-app.replit.app
+DOCMIND_CORS_ORIGINS=https://your-app.vercel.app
 ```
 
 ---

@@ -1,4 +1,5 @@
 {
+  "installCommand": "pnpm install",
   "buildCommand": "pnpm --filter @workspace/docmind run build",
   "outputDirectory": "artifacts/docmind/dist",
   "framework": "vite"
