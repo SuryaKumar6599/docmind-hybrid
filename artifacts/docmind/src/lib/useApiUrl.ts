@@ -35,7 +35,7 @@ export function useApiUrl() {
     // 1. Runtime config written by backend/app/tunnel_manager.py on startup.
     //    This lets the deployed frontend follow changing trycloudflare URLs.
     if (CONFIG_BUCKET_URL) {
-      fetch(CONFIG_BUCKET_URL, { cache: "no-store" })
+      fetch(`${CONFIG_BUCKET_URL}?t=${Date.now()}`, { cache: "no-store" })
         .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
         .then((text) => {
           const config = JSON.parse(text);

@@ -1,68 +1,69 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# One-time installer for DocMind local backend auto-start.
 
-# DocMind Auto-Backend + Tunnel Setup
-# Starts FastAPI and an auto-updating Cloudflare Quick Tunnel
+set -euo pipefail
 
-echo "╔═══════════════════════════════════════════════╗"
-echo "║  DocMind — Auto-Backend & Quick Tunnel Setup  ║"
-echo "╚═══════════════════════════════════════════════╝"
-
-cd "$(dirname "$0")/../backend"
-BACKEND_DIR=$(pwd)
-
-echo ""
-echo "► Creating startup script..."
-cat << 'EOF' > run_daemon.sh
-#!/bin/bash
-# Activated by macOS launchd
-cd "$(dirname "$0")"
-source .venv/bin/activate
-
-# 1. Start FastAPI in the background
-echo "Starting FastAPI..."
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
-FASTAPI_PID=$!
-
-# 2. Start Worker in the background
-echo "Starting Worker..."
-python -m app.worker &
-WORKER_PID=$!
-
-# 3. Start Tunnel Manager (which uploads URL to Supabase)
-echo "Starting Tunnel Manager..."
-python -m app.tunnel_manager &
-TUNNEL_PID=$!
-
-# Wait for processes
-wait $FASTAPI_PID
-wait $WORKER_PID
-wait $TUNNEL_PID
-EOF
-chmod +x run_daemon.sh
-
-echo "► Installing macOS LaunchAgent..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+BACKEND_DIR="$PROJECT_DIR/backend"
+LOG_DIR="$PROJECT_DIR/logs"
 PLIST_PATH="$HOME/Library/LaunchAgents/com.docmind.backend.plist"
+LABEL="com.docmind.backend"
+UID_VALUE="$(id -u)"
 
-cat << EOF > "$PLIST_PATH"
+mkdir -p "$LOG_DIR" "$HOME/Library/LaunchAgents"
+
+echo "DocMind auto-start setup"
+echo "Project: $PROJECT_DIR"
+
+if [[ ! -f "$BACKEND_DIR/.env" ]]; then
+  echo "Missing backend/.env. Create it first:"
+  echo "  cp $BACKEND_DIR/.env.example $BACKEND_DIR/.env"
+  echo "Then fill SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+  exit 1
+fi
+
+if [[ ! -x "$BACKEND_DIR/.venv/bin/python" ]]; then
+  echo "Creating backend virtualenv at backend/.venv ..."
+  python3 -m venv "$BACKEND_DIR/.venv"
+fi
+
+echo "Installing backend Python dependencies ..."
+"$BACKEND_DIR/.venv/bin/python" -m pip install -r "$BACKEND_DIR/requirements.txt"
+
+chmod +x "$BACKEND_DIR/run_daemon.sh"
+xattr -d com.apple.quarantine "$BACKEND_DIR/run_daemon.sh" 2>/dev/null || true
+xattr -d com.apple.quarantine "$PROJECT_DIR/scripts/setup-tunnel.sh" 2>/dev/null || true
+
+if [[ "$PROJECT_DIR" == "$HOME/Documents/"* ]]; then
+  echo ""
+  echo "Note: this project is inside Documents. If launchd logs 'Operation not permitted',"
+  echo "move the repo to a non-protected path like $HOME/Projects/docmind-hybrid and rerun this setup."
+  echo ""
+fi
+
+cat > "$PLIST_PATH" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.docmind.backend</string>
+    <string>$LABEL</string>
     <key>ProgramArguments</key>
     <array>
+        <string>/bin/bash</string>
         <string>$BACKEND_DIR/run_daemon.sh</string>
     </array>
+    <key>WorkingDirectory</key>
+    <string>$BACKEND_DIR</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$BACKEND_DIR/../logs/fastapi.log</string>
+    <string>$LOG_DIR/daemon.log</string>
     <key>StandardErrorPath</key>
-    <string>$BACKEND_DIR/../logs/fastapi.log</string>
+    <string>$LOG_DIR/daemon.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -72,11 +73,20 @@ cat << EOF > "$PLIST_PATH"
 </plist>
 EOF
 
-# Restart the service
-echo "► Restarting background service..."
+echo "Installing LaunchAgent ..."
+launchctl bootout "gui/$UID_VALUE" "$PLIST_PATH" 2>/dev/null || true
 launchctl unload "$PLIST_PATH" 2>/dev/null || true
-launchctl load "$PLIST_PATH"
+launchctl bootstrap "gui/$UID_VALUE" "$PLIST_PATH" 2>/dev/null || launchctl load -w "$PLIST_PATH"
+launchctl enable "gui/$UID_VALUE/$LABEL" 2>/dev/null || true
+launchctl kickstart -k "gui/$UID_VALUE/$LABEL" 2>/dev/null || true
 
-echo "✅ Done! FastAPI and Cloudflare are running in the background."
-echo "✅ The tunnel URL will be automatically sent to Vercel via Supabase."
-echo "► Check logs: tail -f ../logs/fastapi.log"
+echo ""
+echo "Done. DocMind backend, worker, and tunnel manager are installed."
+echo "Logs:"
+echo "  tail -f $LOG_DIR/daemon.log"
+echo "  tail -f $LOG_DIR/backend.log"
+echo "  tail -f $LOG_DIR/worker.log"
+echo "  tail -f $LOG_DIR/tunnel.log"
+echo ""
+echo "Health check:"
+echo "  curl http://127.0.0.1:8000/health"

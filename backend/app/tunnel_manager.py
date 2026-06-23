@@ -1,8 +1,9 @@
-import re
-import subprocess
-import time
 import os
+import json
+import re
 import sys
+import time
+import subprocess
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -24,6 +25,7 @@ else:
 
 def push_url_to_supabase(url: str):
     """Pushes the tunnel URL to Supabase and writes it locally for frontend dev."""
+    updated_at = int(time.time())
     
     # 1. Always write locally for seamless local development
     env_local_path = os.path.join(os.path.dirname(__file__), "..", "..", "artifacts", "docmind", ".env.local")
@@ -50,7 +52,7 @@ def push_url_to_supabase(url: str):
         print("⚠️  Skipping Supabase upload due to dummy credentials.")
         return
 
-    print(f"Pushing Tunnel URL to Supabase: {url}")
+    print(f"Pushing Tunnel URL to Supabase: {url}", flush=True)
     bucket_name = "docmind-config"
     file_name = "api_url.json"
     
@@ -65,20 +67,25 @@ def push_url_to_supabase(url: str):
     except Exception:
         pass
         
-    import json
-    data = json.dumps({"api_url": url}).encode("utf-8")
+    data = json.dumps({"api_url": url, "updated_at": updated_at}).encode("utf-8")
     supabase.storage.from_(bucket_name).upload(file_name, data)
-    print("✅ Successfully pushed to public config bucket!")
+    print("✅ Successfully pushed to public config bucket!", flush=True)
 
 def main():
-    print("Starting Cloudflare Quick Tunnel...")
+    print("Starting Cloudflare Quick Tunnel...", flush=True)
     # Start cloudflared in the background
-    process = subprocess.Popen(
-        ["cloudflared", "tunnel", "--url", "http://127.0.0.1:8000"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
+    try:
+        process = subprocess.Popen(
+            ["cloudflared", "tunnel", "--url", "http://127.0.0.1:8000"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+    except FileNotFoundError:
+        print("Error: cloudflared is not installed or not on PATH.", flush=True)
+        print("Install it with: brew install cloudflared", flush=True)
+        sys.exit(1)
 
     url = None
     # Cloudflared outputs the quick tunnel URL to stderr
@@ -86,12 +93,12 @@ def main():
         line = process.stderr.readline()
         if not line:
             break
-        print(line.strip())
+        print(line.strip(), flush=True)
         # Look for https://[random].trycloudflare.com
         match = re.search(r'(https://[a-zA-Z0-9-]+\.trycloudflare\.com)', line)
         if match:
             url = match.group(1)
-            print(f"\n✅ Quick Tunnel Established: {url}\n")
+            print(f"\n✅ Quick Tunnel Established: {url}\n", flush=True)
             push_url_to_supabase(url)
             break
 
