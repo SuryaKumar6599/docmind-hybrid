@@ -5,7 +5,7 @@ const CONFIG_BUCKET_URL = SUPABASE_URL
   ? `${SUPABASE_URL}/storage/v1/object/public/docmind-config/api_url.json`
   : null;
 
-const REFRESH_INTERVAL_MS = 45_000; // re-check the dynamic tunnel URL every 45s
+const REFRESH_INTERVAL_MS = 10_000; // re-check the dynamic tunnel URL every 45s
 
 let cachedApiUrl: string | null = null;
 let cachedConfigUpdatedAt: number | null = null; // epoch seconds, from tunnel_manager.py

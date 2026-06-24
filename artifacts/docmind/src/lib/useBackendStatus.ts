@@ -4,18 +4,19 @@ import { useApiUrl } from "./useApiUrl";
 export type BackendStatus = "connected" | "starting" | "offline";
 
 const RETRY_ATTEMPTS = 3;
-const RETRY_INTERVAL_MS = 3000; // 3 attempts spaced 3s apart = 6s total before "offline"
-const RECHECK_INTERVAL_MS = 45000; // re-probe periodically once a state is settled
+const RETRY_INTERVAL_MS = 3000;
+const RECHECK_INTERVAL_MS = 45000;
 const HEALTH_TIMEOUT_MS = 4000;
-const NO_URL_GRACE_MS = 3000; // time to let useApiUrl resolve before treating "" as offline
+const NO_URL_GRACE_MS = 15000;
 
 /**
  * Centralizes backend reachability checks so every page reports the same
  * status instead of each running its own ad-hoc fetch(`${API_URL}/health`).
  *
- * - "starting": URL not resolved yet, or a retry attempt is still in flight.
- * - "connected": last /health call returned ok.
- * - "offline": all retry attempts failed, or no API URL could be resolved.
+ * Status meanings:
+ * - starting: waiting for tunnel URL or health checks still running
+ * - connected: backend health endpoint returned success
+ * - offline: tunnel URL exists but backend failed all retries
  */
 export function useBackendStatus() {
   const apiUrl = useApiUrl();
@@ -36,17 +37,45 @@ export function useBackendStatus() {
 
     function scheduleRecheck() {
       clearTimer();
+
       timerRef.current = setTimeout(() => {
         attempt = 0;
         probe();
       }, RECHECK_INTERVAL_MS);
     }
 
+    function failOrRetry() {
+      attempt += 1;
+
+      if (attempt >= RETRY_ATTEMPTS) {
+        setStatus("offline");
+        scheduleRecheck();
+        return;
+      }
+
+      setStatus("starting");
+
+      clearTimer();
+
+      timerRef.current = setTimeout(() => {
+        probe();
+      }, RETRY_INTERVAL_MS);
+    }
+
     function probe() {
-      fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) })
+      if (!apiUrl) {
+        setStatus("starting");
+        return;
+      }
+
+      fetch(`${apiUrl}/health`, {
+        signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+      })
         .then((res) => {
           if (cancelled) return;
+
           setLastChecked(new Date());
+
           if (res.ok) {
             setStatus("connected");
             scheduleRecheck();
@@ -56,31 +85,26 @@ export function useBackendStatus() {
         })
         .catch(() => {
           if (cancelled) return;
+
           setLastChecked(new Date());
           failOrRetry();
         });
     }
 
-    function failOrRetry() {
-      attempt += 1;
-      if (attempt >= RETRY_ATTEMPTS) {
-        setStatus("offline");
-        scheduleRecheck();
-        return;
-      }
-      setStatus("starting");
-      clearTimer();
-      timerRef.current = setTimeout(probe, RETRY_INTERVAL_MS);
-    }
-
+    // IMPORTANT:
+    // Don't show offline just because the tunnel URL
+    // hasn't been loaded from Supabase yet.
     if (!apiUrl) {
-      // useApiUrl() is itself async (Supabase bucket fetch, then env fallback).
-      // Give it a short grace period instead of immediately calling it offline.
-      setStatus((s) => (s === "connected" ? s : "starting"));
+      setStatus("starting");
+
       clearTimer();
+
       timerRef.current = setTimeout(() => {
-        if (!cancelled) setStatus("offline");
+        if (!cancelled) {
+          setStatus("starting");
+        }
       }, NO_URL_GRACE_MS);
+
       return () => {
         cancelled = true;
         clearTimer();

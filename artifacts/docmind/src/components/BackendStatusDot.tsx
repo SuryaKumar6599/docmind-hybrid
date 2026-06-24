@@ -13,22 +13,48 @@ const LABEL: Record<BackendStatus, string> = {
 };
 
 function tooltipFor(status: BackendStatus, apiUrl: string): string {
-  if (status === "connected") return apiUrl ? `Local backend connected — ${apiUrl}` : "Local backend connected";
-  if (status === "starting") return "Local backend starting…";
+  if (status === "connected") {
+    return apiUrl
+      ? `Backend connected — ${apiUrl}`
+      : "Backend connected";
+  }
+
+  if (status === "starting") {
+    return "Waiting for tunnel URL or backend health check...";
+  }
+
   return apiUrl
-    ? `Local backend unreachable — start FastAPI + Cloudflare Tunnel then refresh.`
-    : `No backend URL configured — set VITE_DOCMIND_API_URL.`;
+    ? "Backend unreachable. Waiting for next health check."
+    : "Waiting for tunnel URL from Supabase configuration.";
 }
 
-/** Small colored dot only. Drop-in replacement for the old amber/green ApiDot. */
-export function BackendStatusDot({ status, apiUrl }: { status: BackendStatus; apiUrl: string }) {
-  return <span className={`inline-block h-2.5 w-2.5 rounded-full ${DOT_COLOR[status]}`} title={tooltipFor(status, apiUrl)} />;
-}
-
-/** Dot + short text label, for places that show status inline (e.g. sidebar card). */
-export function BackendStatusBadge({ status, apiUrl }: { status: BackendStatus; apiUrl: string }) {
+export function BackendStatusDot({
+  status,
+  apiUrl,
+}: {
+  status: BackendStatus;
+  apiUrl: string;
+}) {
   return (
-    <span className="flex items-center gap-1.5 text-xs font-medium text-ink/50" title={tooltipFor(status, apiUrl)}>
+    <span
+      className={`inline-block h-2.5 w-2.5 rounded-full ${DOT_COLOR[status]}`}
+      title={tooltipFor(status, apiUrl)}
+    />
+  );
+}
+
+export function BackendStatusBadge({
+  status,
+  apiUrl,
+}: {
+  status: BackendStatus;
+  apiUrl: string;
+}) {
+  return (
+    <span
+      className="flex items-center gap-1.5 text-xs font-medium text-ink/50"
+      title={tooltipFor(status, apiUrl)}
+    >
       <BackendStatusDot status={status} apiUrl={apiUrl} />
       {LABEL[status]}
     </span>
