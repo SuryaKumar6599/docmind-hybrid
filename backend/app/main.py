@@ -13,6 +13,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
+        allow_origin_regex=r"https://docmind-hybrid-api-server-wa3m(-[a-z0-9]+)?\.vercel\.app",
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],

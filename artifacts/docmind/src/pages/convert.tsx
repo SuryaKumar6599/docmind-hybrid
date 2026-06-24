@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -15,9 +15,8 @@ import {
   Zap,
 } from "lucide-react";
 
-import { useApiUrl } from "../lib/useApiUrl";
+import { useBackendStatus } from "../hooks/useBackendStatus";
 
-// removed static API_URL
 
 const SUPPORTED_FORMATS = [
   { ext: "PDF", color: "bg-red-100 text-red-700" },
@@ -42,8 +41,9 @@ interface ConvertResult {
 
 export default function Convert() {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [apiReady, setApiReady] = useState<boolean | null>(null);
-  const API_URL = useApiUrl();
+  const backend = useBackendStatus();
+  const API_URL = backend.apiUrl;
+  const apiReady = backend.online === true;
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,13 +51,6 @@ export default function Convert() {
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!API_URL) return;
-    fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(2000) })
-      .then((r) => setApiReady(r.ok))
-      .catch(() => setApiReady(false));
-  }, [API_URL]);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -134,12 +127,19 @@ export default function Convert() {
         {/* Left sidebar */}
         <div className="space-y-4">
           {/* Backend status */}
-          <div className="flex items-center justify-between rounded-lg border border-ink/10 bg-white/80 px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <Server size={16} /> Local backend
+          <div className="rounded-lg border border-ink/10 bg-white/80 px-4 py-3 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <Server size={16} /> Local backend
+              </div>
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  backend.status === "connected" ? "bg-fern" : backend.status === "starting" ? "bg-amber animate-pulse" : "bg-red-400"
+                }`}
+                title={backend.detail}
+              />
             </div>
-            <span className={`h-2.5 w-2.5 rounded-full ${apiReady ? "bg-fern" : "bg-amber"}`}
-              title={apiReady ? API_URL : "Set VITE_DOCMIND_API_URL"} />
+            <p className="mt-1 text-xs font-medium text-ink/60">{backend.label}</p>
           </div>
 
           {/* Supported formats */}
@@ -239,7 +239,7 @@ export default function Convert() {
 
           {!apiReady && (
             <p className="rounded-md bg-amber/10 px-4 py-2.5 text-sm text-amber">
-              Set <code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> to your Cloudflare tunnel URL to enable conversion.
+              {backend.status === "starting" ? "Local backend is starting. Try again in a moment." : "Local backend is offline. Check Ollama, FastAPI, and the tunnel."}
             </p>
           )}
 

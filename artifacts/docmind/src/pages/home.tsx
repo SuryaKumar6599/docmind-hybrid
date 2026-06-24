@@ -37,15 +37,15 @@ type IndexedDoc = {
   id: string;
 };
 
-import { useApiUrl } from "../lib/useApiUrl";
+import { useBackendStatus } from "../hooks/useBackendStatus";
 
-// removed static API_URL
 
 export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const API_URL = useApiUrl();
-  const [apiReady, setApiReady] = useState(false);
+  const backend = useBackendStatus();
+  const API_URL = backend.apiUrl;
+  const apiReady = backend.online === true;
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [question, setQuestion] = useState("");
@@ -56,13 +56,6 @@ export default function Home() {
   });
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
-
-  useEffect(() => {
-    if (!API_URL) return;
-    fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(2000) })
-      .then((r) => setApiReady(r.ok))
-      .catch(() => setApiReady(false));
-  }, [API_URL]);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -252,10 +245,16 @@ export default function Home() {
               <div className="flex items-center gap-2 text-sm font-semibold text-ink">
                 <Server size={18} /> Local backend
               </div>
-              <span className={`h-2.5 w-2.5 rounded-full ${apiReady ? "bg-fern" : "bg-amber"}`} />
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  backend.status === "connected" ? "bg-fern" : backend.status === "starting" ? "bg-amber animate-pulse" : "bg-red-400"
+                }`}
+                title={backend.detail}
+              />
             </div>
-            <p className="mt-2 break-all text-xs text-ink/50">
-              {apiReady ? API_URL : "Set VITE_DOCMIND_API_URL"}
+            <p className="mt-2 text-xs font-medium text-ink/60">{backend.label}</p>
+            <p className="mt-1 break-all text-xs text-ink/40">
+              {API_URL || "Waiting for tunnel URL"}
             </p>
           </section>
 

@@ -83,19 +83,65 @@ def get_instructor_client(chat_provider: BaseChatProvider = Depends(get_chat_pro
 # Health
 # ---------------------------------------------------------------------------
 
+def _ollama_status(settings: Settings) -> dict[str, object]:
+    required_models = {
+        settings.ollama_chat_model,
+        settings.ollama_vision_model,
+        settings.ollama_embed_model,
+    }
+    try:
+        resp = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=3)
+        resp.raise_for_status()
+        data = resp.json()
+        models = {m.get("name", "") for m in data.get("models", [])}
+        model_roots = {model.split(":", 1)[0] for model in models}
+        missing = sorted(
+            model for model in required_models
+            if model not in models and f"{model}:latest" not in models and model.split(":", 1)[0] not in model_roots
+        )
+        return {
+            "ok": True,
+            "models_ok": not missing,
+            "missing_models": missing,
+        }
+    except Exception as exc:
+        logger.warning("Ollama health-check failed: %s", exc)
+        return {
+            "ok": False,
+            "models_ok": False,
+            "missing_models": sorted(required_models),
+            "error": str(exc),
+        }
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
     """Return service status. Pings Ollama to verify connectivity."""
-    ollama_ok = False
-    try:
-        resp = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=3)
-        ollama_ok = resp.ok
-    except Exception as exc:
-        logger.warning("Ollama health-check failed: %s", exc)
-
-    status = "ok" if ollama_ok else "degraded"
-    logger.info("/health → %s (ollama=%s)", status, ollama_ok)
+    ollama = _ollama_status(settings)
+    status = "ok" if ollama["ok"] else "degraded"
+    logger.info("/health → %s (ollama=%s)", status, ollama["ok"])
     return HealthResponse(status=status, runtime="local-fastapi-ollama-v2")
+
+
+@router.get("/health/full")
+async def health_full(settings: Settings = Depends(get_settings)) -> dict[str, object]:
+    """Return detailed dependency status for the frontend diagnostics UI."""
+    ollama = _ollama_status(settings)
+    supabase_configured = bool(settings.supabase_url and settings.supabase_service_role_key)
+    checks = {
+        "fastapi": True,
+        "ollama": bool(ollama["ok"]),
+        "ollama_models": bool(ollama["models_ok"]),
+        "supabase_configured": supabase_configured,
+    }
+    status = "ok" if all(checks.values()) else "degraded"
+    return {
+        "status": status,
+        "runtime": "local-fastapi-ollama-v2",
+        "checks": checks,
+        "ollama": ollama,
+        "cors_origins": settings.cors_origins,
+    }
 
 
 @router.get("/")

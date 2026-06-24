@@ -4,6 +4,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const CONFIG_BUCKET_URL = SUPABASE_URL
   ? `${SUPABASE_URL}/storage/v1/object/public/docmind-config/api_url.json`
   : null;
+const REFRESH_MS = 45000;
 
 let cachedApiUrl: string | null = null;
 
@@ -11,19 +12,20 @@ function cleanApiUrl(url: string | undefined) {
   return url?.trim().replace(/\/+$/, "") || "";
 }
 
+async function fetchDynamicApiUrl() {
+  if (!CONFIG_BUCKET_URL) return "";
+  const response = await fetch(`${CONFIG_BUCKET_URL}?t=${Date.now()}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const config = await response.json();
+  return cleanApiUrl(config?.api_url as string | undefined);
+}
+
 export function useApiUrl() {
-  const [apiUrl, setApiUrl] = useState<string>("");
+  const [apiUrl, setApiUrl] = useState<string>(cachedApiUrl || "");
 
   useEffect(() => {
     let cancelled = false;
-
-    if (cachedApiUrl) {
-      setApiUrl(cachedApiUrl);
-      return;
-    }
-
-    // Fallback only. Vite env values are baked at build time, but Cloudflare
-    // quick-tunnel URLs change at runtime.
+    let timer: number | undefined;
     const envUrl = cleanApiUrl(import.meta.env.VITE_DOCMIND_API_URL as string | undefined);
 
     const useUrl = (url: string) => {
@@ -32,32 +34,29 @@ export function useApiUrl() {
       setApiUrl(url);
     };
 
-    // 1. Runtime config written by backend/app/tunnel_manager.py on startup.
-    //    This lets the deployed frontend follow changing trycloudflare URLs.
-    if (CONFIG_BUCKET_URL) {
-      fetch(`${CONFIG_BUCKET_URL}?t=${Date.now()}`, { cache: "no-store" })
-        .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
-        .then((text) => {
-          const config = JSON.parse(text);
-          const dynamicUrl = cleanApiUrl(config?.api_url as string | undefined);
-          useUrl(dynamicUrl || envUrl);
-        })
+    const refresh = () => {
+      fetchDynamicApiUrl()
+        .then((dynamicUrl) => useUrl(dynamicUrl || envUrl))
         .catch((err) => {
           console.warn("[DocMind] Could not fetch dynamic API URL from bucket:", err);
           useUrl(envUrl);
+        })
+        .finally(() => {
+          if (!cancelled && CONFIG_BUCKET_URL) {
+            timer = window.setTimeout(refresh, REFRESH_MS);
+          }
         });
-      return () => {
-        cancelled = true;
-      };
-    }
+    };
 
-    // 2. Env variable for local/offline setups without Supabase config.
-    if (envUrl) {
+    if (CONFIG_BUCKET_URL) {
+      refresh();
+    } else {
       useUrl(envUrl);
     }
 
     return () => {
       cancelled = true;
+      if (timer) window.clearTimeout(timer);
     };
   }, []);
 

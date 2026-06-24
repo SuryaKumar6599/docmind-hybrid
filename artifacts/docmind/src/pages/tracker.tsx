@@ -29,8 +29,8 @@ import {
 } from "../lib/supabase";
 
 import { useApiUrl } from "../lib/useApiUrl";
+import { useBackendStatus } from "../hooks/useBackendStatus";
 
-// Removed static API_URL
 
 // ---------------------------------------------------------------------------
 // Status config
@@ -109,11 +109,11 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
 }
 
 function ApiDot({ online }: { online: boolean | null }) {
-  if (online === null) return <span className="inline-block h-2 w-2 rounded-full bg-ink/20 animate-pulse" title="Checking backend…" />;
+  if (online === null) return <span className="inline-block h-2 w-2 rounded-full bg-amber animate-pulse" title="Checking backend…" />;
   return (
     <span
-      className={`inline-block h-2 w-2 rounded-full ${online ? "bg-fern" : "bg-amber"}`}
-      title={online ? "Local backend connected" : "Local backend unreachable — set VITE_DOCMIND_API_URL"}
+      className={`inline-block h-2 w-2 rounded-full ${online ? "bg-fern" : "bg-red-400"}`}
+      title={online ? "Local backend connected" : "Local backend offline"}
     />
   );
 }
@@ -820,18 +820,12 @@ export default function Tracker() {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
-  const API_URL = useApiUrl();
-
-  // Backend health probe
-  useEffect(() => {
-    if (!API_URL) { setBackendOnline(false); return; }
-    fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(4000) })
-      .then((r) => setBackendOnline(r.ok))
-      .catch(() => setBackendOnline(false));
-  }, [API_URL]);
+  const backend = useBackendStatus();
+  const backendOnline = backend.online;
+  const API_URL = backend.apiUrl;
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setLoading(false); return; }
@@ -908,10 +902,14 @@ export default function Tracker() {
       )}
 
       {/* Backend health banner */}
-      {API_URL && backendOnline === false && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber/30 bg-amber/5 px-4 py-2.5 text-sm text-amber">
+      {backend.status !== "connected" && (
+        <div className={`mb-4 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm ${
+          backend.status === "starting"
+            ? "border-amber/30 bg-amber/5 text-amber"
+            : "border-red-200 bg-red-50 text-red-600"
+        }`}>
           <WifiOff size={14} />
-          Local backend unreachable — start FastAPI + Cloudflare Tunnel then refresh.
+          {backend.status === "starting" ? "Local backend starting — checking FastAPI and tunnel." : "Local backend offline — check Ollama, FastAPI, and Cloudflare Tunnel."}
         </div>
       )}
 

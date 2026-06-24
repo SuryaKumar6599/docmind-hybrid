@@ -44,7 +44,7 @@ class Settings:
             ollama_chat_model=os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
             ollama_vision_model=os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b"),
             ollama_embed_model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
-            cors_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
+            cors_origins=tuple(o.strip().rstrip("/") for o in origins.split(",") if o.strip()),
             token_budget_total=int(os.getenv("TOKEN_BUDGET_TOTAL", "8000")),
             worker_poll_interval_seconds=int(os.getenv("WORKER_POLL_INTERVAL", "10")),
             docx_template_path=os.getenv("DOCX_TEMPLATE_PATH", ""),
