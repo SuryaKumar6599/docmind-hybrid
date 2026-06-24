@@ -78,7 +78,7 @@ def main():
         process = subprocess.Popen(
             ["cloudflared", "tunnel", "--url", "http://127.0.0.1:8000"],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
         )
@@ -90,7 +90,7 @@ def main():
     url = None
     # Cloudflared outputs the quick tunnel URL to stderr
     while True:
-        line = process.stderr.readline()
+        line = process.stdout.readline()
         if not line:
             break
         print(line.strip(), flush=True)
