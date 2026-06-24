@@ -37,15 +37,16 @@ type IndexedDoc = {
   id: string;
 };
 
-import { useApiUrl } from "../lib/useApiUrl";
+import { useBackendStatus } from "../lib/useBackendStatus";
+import { BackendStatusBadge } from "../components/BackendStatusDot";
+import { BackendDebugPanel } from "../components/BackendDebugPanel";
 
 // removed static API_URL
 
 export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const API_URL = useApiUrl();
-  const [apiReady, setApiReady] = useState(false);
+  const { apiUrl: API_URL, status: backendStatus } = useBackendStatus();
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [question, setQuestion] = useState("");
@@ -56,13 +57,6 @@ export default function Home() {
   });
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
-
-  useEffect(() => {
-    if (!API_URL) return;
-    fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(2000) })
-      .then((r) => setApiReady(r.ok))
-      .catch(() => setApiReady(false));
-  }, [API_URL]);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -252,12 +246,20 @@ export default function Home() {
               <div className="flex items-center gap-2 text-sm font-semibold text-ink">
                 <Server size={18} /> Local backend
               </div>
-              <span className={`h-2.5 w-2.5 rounded-full ${apiReady ? "bg-fern" : "bg-amber"}`} />
+              <BackendStatusBadge status={backendStatus} apiUrl={API_URL} />
             </div>
-            <p className="mt-2 break-all text-xs text-ink/50">
-              {apiReady ? API_URL : "Set VITE_DOCMIND_API_URL"}
-            </p>
+            {backendStatus !== "connected" && (
+              <p className="mt-2 text-xs text-ink/50">
+                {backendStatus === "starting"
+                  ? "Checking connection…"
+                  : API_URL
+                    ? "Unreachable — start FastAPI + Cloudflare Tunnel, then refresh."
+                    : "Set VITE_DOCMIND_API_URL."}
+              </p>
+            )}
           </section>
+
+          <BackendDebugPanel apiUrl={API_URL} />
 
           {/* Upload */}
           <section className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">
@@ -395,7 +397,7 @@ export default function Home() {
                 placeholder="Ask across indexed documents…"
                 className="min-h-11 flex-1 rounded-md border border-ink/15 bg-paper px-3 text-base outline-none ring-signal/30 focus:ring-4"
               />
-              <button type="submit" disabled={!question.trim() || isAsking || !apiReady}
+              <button type="submit" disabled={!question.trim() || isAsking || backendStatus !== "connected"}
                 className="flex h-11 items-center gap-2 rounded-md bg-moss px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-ink/25">
                 {isAsking ? <Loader2 className="animate-spin" size={17} /> : <Search size={17} />}
                 Ask
@@ -411,6 +413,7 @@ export default function Home() {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
+  const [openCitation, setOpenCitation] = useState<string | null>(null);
   return (
     <motion.article 
       initial={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -421,14 +424,24 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       <div className={`max-w-3xl rounded-xl px-5 py-3.5 shadow-sm ${isUser ? "bg-signal text-white" : "bg-white border border-ink/5 text-ink"}`}>
         <p className="whitespace-pre-wrap leading-7">{message.content}</p>
         {!isUser && message.citations && message.citations.length > 0 && (
-          <div className="mt-4 space-y-2">
+          <div className="mt-4">
+            <div className="flex flex-wrap gap-1.5">
+              {message.citations.map((c, i) => (
+                <button
+                  key={c.chunk_id}
+                  onClick={() => setOpenCitation((cur) => (cur === c.chunk_id ? null : c.chunk_id))}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    openCitation === c.chunk_id ? "border-moss bg-moss/10 text-moss" : "border-ink/10 bg-paper text-ink/60 hover:border-moss/30 hover:text-moss"
+                  }`}
+                >
+                  [{i + 1}] {c.document_name}
+                </button>
+              ))}
+            </div>
             {message.citations.map((c) => (
-              <details key={c.chunk_id} className="rounded-md border border-ink/10 bg-white p-3 text-sm">
-                <summary className="cursor-pointer font-semibold text-moss">
-                  {c.document_name} — {c.chunk_id}
-                </summary>
-                {c.quote && <p className="mt-2 text-ink/75">{c.quote}</p>}
-              </details>
+              openCitation === c.chunk_id && c.quote && (
+                <p key={c.chunk_id} className="mt-2 rounded-md border border-ink/10 bg-paper p-3 text-sm text-ink/75">{c.quote}</p>
+              )
             ))}
           </div>
         )}

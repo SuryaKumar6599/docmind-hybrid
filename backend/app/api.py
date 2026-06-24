@@ -24,10 +24,22 @@ from fastapi.responses import StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel
 
+import datetime as dt
+import re
+
 from .config import Settings, get_settings
 from .document_processing import DocumentProcessor, chunk_text
 from .llm_gateway import BaseChatProvider, BaseEmbeddingProvider, get_chat_provider, get_embedding_provider
-from .models import AskRequest, AskResponse, HealthResponse, IndexResponse
+from .models import (
+    AskRequest,
+    AskResponse,
+    HealthFullResponse,
+    HealthResponse,
+    IndexResponse,
+    OllamaHealth,
+    SupabaseHealth,
+    TunnelHealth,
+)
 from .rag import LocalRAG
 from .schemas import JobMatchAnalysis, TailoredContent
 from .supabase_store import SupabaseVectorStore
@@ -98,6 +110,85 @@ async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
     return HealthResponse(status=status, runtime="local-fastapi-ollama-v2")
 
 
+_TUNNEL_URL_PATTERN = re.compile(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com")
+
+
+def _latest_tunnel_url() -> str | None:
+    """Read the most recent quick-tunnel URL cloudflared printed to logs/tunnel.log."""
+    log_path = Path(__file__).resolve().parents[2] / "logs" / "tunnel.log"
+    if not log_path.exists():
+        return None
+    try:
+        matches = _TUNNEL_URL_PATTERN.findall(log_path.read_text(errors="ignore"))
+    except Exception:
+        return None
+    return matches[-1] if matches else None
+
+
+def _model_installed(wanted: str, installed: set[str]) -> bool:
+    """Match an exact Ollama tag, or fall back to comparing base names so a
+    ':latest' pull still satisfies a request for e.g. 'qwen2.5:7b'."""
+    if wanted in installed:
+        return True
+    base_wanted = wanted.split(":")[0]
+    return any(name.split(":")[0] == base_wanted for name in installed)
+
+
+@router.get("/health/full", response_model=HealthFullResponse)
+async def health_full(settings: Settings = Depends(get_settings)) -> HealthFullResponse:
+    """Detailed status for the debug panel: Ollama + required models, Supabase, tunnel."""
+    ollama_reachable = False
+    model_status = {"chat": False, "vision": False, "embed": False}
+    try:
+        resp = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=3)
+        ollama_reachable = resp.ok
+        if resp.ok:
+            installed = {m.get("name", "") for m in resp.json().get("models", [])}
+            model_status["chat"] = _model_installed(settings.ollama_chat_model, installed)
+            model_status["vision"] = _model_installed(settings.ollama_vision_model, installed)
+            model_status["embed"] = _model_installed(settings.ollama_embed_model, installed)
+    except Exception as exc:
+        logger.warning("Ollama health-check failed: %s", exc)
+
+    supabase_configured = bool(settings.supabase_url and settings.supabase_service_role_key)
+    supabase_reachable = False
+    if supabase_configured:
+        try:
+            resp = requests.get(
+                f"{settings.supabase_url}/auth/v1/health",
+                headers={"apikey": settings.supabase_service_role_key},
+                timeout=3,
+            )
+            supabase_reachable = resp.ok
+        except Exception as exc:
+            logger.warning("Supabase health-check failed: %s", exc)
+
+    tunnel_url = _latest_tunnel_url()
+    models_ok = all(model_status.values())
+
+    if ollama_reachable and models_ok and supabase_reachable:
+        overall = "ok"
+    elif not ollama_reachable and not supabase_reachable:
+        overall = "down"
+    else:
+        overall = "degraded"
+
+    logger.info(
+        "/health/full → %s (ollama=%s models=%s supabase=%s tunnel=%s)",
+        overall, ollama_reachable, model_status, supabase_reachable, tunnel_url is not None,
+    )
+
+    return HealthFullResponse(
+        status=overall,
+        runtime="local-fastapi-ollama-v2",
+        checked_at=dt.datetime.now(dt.timezone.utc).isoformat(),
+        fastapi=True,
+        ollama=OllamaHealth(reachable=ollama_reachable, models=model_status),
+        supabase=SupabaseHealth(configured=supabase_configured, reachable=supabase_reachable),
+        tunnel=TunnelHealth(known=tunnel_url is not None, url=tunnel_url),
+    )
+
+
 @router.get("/")
 async def root() -> dict[str, object]:
     return {
@@ -106,6 +197,7 @@ async def root() -> dict[str, object]:
         "status": "ok",
         "endpoints": {
             "health":            "GET  /health",
+            "health-full":       "GET  /health/full         detailed: ollama, models, supabase, tunnel",
             "index":             "POST /index              multipart: file=<document>",
             "ask":               "POST /ask                JSON: {question, match_count, category?}",
             "extract-skills":    "POST /extract-skills     JSON: {resume_text, jd_text}",

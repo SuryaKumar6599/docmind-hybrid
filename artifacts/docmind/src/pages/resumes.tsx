@@ -9,6 +9,7 @@ import {
   FileText,
   Hash,
   Loader2,
+  Star,
   Trash2,
   UploadCloud,
   XCircle,
@@ -22,12 +23,25 @@ const STATUS_CONFIG: Record<ResumeStatus, { label: string; color: string; bg: st
   error:              { label: "Error",      color: "text-red-500", bg: "bg-red-50",    icon: XCircle },
 };
 
-function ResumeRow({ resume, onDelete }: { resume: Resume; onDelete: (id: string) => void }) {
+function ResumeRow({
+  resume,
+  onDelete,
+  onSetDefault,
+}: {
+  resume: Resume;
+  onDelete: (id: string) => void;
+  onSetDefault: (resume: Resume) => void;
+}) {
   const cfg = STATUS_CONFIG[resume.status];
   const Icon = cfg.icon;
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [settingDefault, setSettingDefault] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const wordCount = resume.markdown_content
+    ? resume.markdown_content.trim().split(/\s+/).filter(Boolean).length
+    : null;
 
   async function handleDelete() {
     if (!window.confirm(`Delete "${resume.original_filename}"? This cannot be undone.`)) return;
@@ -38,6 +52,16 @@ function ResumeRow({ resume, onDelete }: { resume: Resume; onDelete: (id: string
       onDelete(resume.id);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleSetDefault() {
+    if (resume.is_default || settingDefault) return;
+    setSettingDefault(true);
+    try {
+      await onSetDefault(resume);
+    } finally {
+      setSettingDefault(false);
     }
   }
 
@@ -54,10 +78,16 @@ function ResumeRow({ resume, onDelete }: { resume: Resume; onDelete: (id: string
       <div className="flex items-center gap-3 px-4 py-3">
         <FileText className="shrink-0 text-ink/40" size={20} />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-ink">{resume.original_filename}</p>
+          <p className="truncate font-medium text-ink">
+            {resume.original_filename}
+            {resume.is_default && (
+              <span className="ml-2 rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-semibold text-amber align-middle">Default</span>
+            )}
+          </p>
           <p className="text-xs text-ink/50">
             {new Date(resume.created_at).toLocaleDateString()}
             {resume.chunk_count != null && ` · ${resume.chunk_count} chunks`}
+            {wordCount != null && ` · ${wordCount.toLocaleString()} words`}
           </p>
         </div>
 
@@ -66,6 +96,17 @@ function ResumeRow({ resume, onDelete }: { resume: Resume; onDelete: (id: string
           <Icon size={12} className={resume.status === "processing" ? "animate-spin" : undefined} />
           {cfg.label}
         </div>
+
+        {/* Use as default (ready only) */}
+        {resume.status === "ready" && (
+          <button onClick={handleSetDefault} disabled={resume.is_default || settingDefault}
+            className={`rounded-md p-1.5 transition-colors ${
+              resume.is_default ? "text-amber" : "text-ink/20 hover:bg-amber/10 hover:text-amber"
+            }`}
+            title={resume.is_default ? "Default resume" : "Use as default resume"}>
+            {settingDefault ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} className={resume.is_default ? "fill-amber" : undefined} />}
+          </button>
+        )}
 
         {/* Expand markdown button (ready only) */}
         {resume.status === "ready" && resume.markdown_content && (
@@ -106,8 +147,13 @@ function ResumeRow({ resume, onDelete }: { resume: Resume; onDelete: (id: string
 
       {/* Error message */}
       {resume.status === "error" && resume.error_message && (
-        <div className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-600">
-          {resume.error_message}
+        <div className="flex items-start gap-2 border-t border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600">
+          <XCircle size={14} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Parsing failed</p>
+            <p className="mt-0.5 text-red-600/80">{resume.error_message}</p>
+            <p className="mt-1 text-red-500/70">Try deleting and re-uploading, or check the file isn't corrupted/password-protected.</p>
+          </div>
         </div>
       )}
     </li>
@@ -178,6 +224,17 @@ export default function Resumes() {
 
   function handleDelete(id: string) {
     setResumes((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  async function handleSetDefault(resume: Resume) {
+    // Partial unique index allows only one is_default=true per user, so unset first.
+    await supabase.from("resumes").update({ is_default: false }).eq("user_id", resume.user_id).eq("is_default", true);
+    const { error: setErr } = await supabase.from("resumes").update({ is_default: true }).eq("id", resume.id);
+    if (setErr) {
+      setError(setErr.message);
+      return;
+    }
+    setResumes((prev) => prev.map((r) => ({ ...r, is_default: r.id === resume.id })));
   }
 
   const readyCount = resumes.filter((r) => r.status === "ready").length;
@@ -262,7 +319,7 @@ export default function Resumes() {
       ) : (
         <ul className="space-y-3">
           {resumes.map((resume) => (
-            <ResumeRow key={resume.id} resume={resume} onDelete={handleDelete} />
+            <ResumeRow key={resume.id} resume={resume} onDelete={handleDelete} onSetDefault={handleSetDefault} />
           ))}
         </ul>
       )}

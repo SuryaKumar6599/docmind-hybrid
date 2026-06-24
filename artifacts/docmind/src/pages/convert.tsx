@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -15,7 +15,8 @@ import {
   Zap,
 } from "lucide-react";
 
-import { useApiUrl } from "../lib/useApiUrl";
+import { useBackendStatus } from "../lib/useBackendStatus";
+import { BackendStatusDot } from "../components/BackendStatusDot";
 
 // removed static API_URL
 
@@ -40,10 +41,21 @@ interface ConvertResult {
   ocr_used: boolean;
 }
 
+interface HistoryEntry {
+  id: string;
+  convertedAt: Date;
+  result: ConvertResult;
+}
+
+function fileTypeBadge(filename: string): { ext: string; color: string } {
+  const ext = (filename.split(".").pop() || "").toUpperCase();
+  const match = SUPPORTED_FORMATS.find((f) => f.ext === ext || f.ext.startsWith(ext));
+  return match ?? { ext: ext || "FILE", color: "bg-ink/5 text-ink/60" };
+}
+
 export default function Convert() {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [apiReady, setApiReady] = useState<boolean | null>(null);
-  const API_URL = useApiUrl();
+  const { apiUrl: API_URL, status: backendStatus } = useBackendStatus();
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,13 +63,7 @@ export default function Convert() {
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!API_URL) return;
-    fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(2000) })
-      .then((r) => setApiReady(r.ok))
-      .catch(() => setApiReady(false));
-  }, [API_URL]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -82,6 +88,7 @@ export default function Convert() {
       const data = await res.json();
       setOcrMode(data.ocr_used ?? false);
       setResult(data);
+      setHistory((prev) => [{ id: `${Date.now()}-${data.filename}`, convertedAt: new Date(), result: data }, ...prev].slice(0, 10));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Conversion failed");
     } finally {
@@ -138,8 +145,7 @@ export default function Convert() {
             <div className="flex items-center gap-2 text-sm font-semibold text-ink">
               <Server size={16} /> Local backend
             </div>
-            <span className={`h-2.5 w-2.5 rounded-full ${apiReady ? "bg-fern" : "bg-amber"}`}
-              title={apiReady ? API_URL : "Set VITE_DOCMIND_API_URL"} />
+            <BackendStatusDot status={backendStatus} apiUrl={API_URL} />
           </div>
 
           {/* Supported formats */}
@@ -173,6 +179,32 @@ export default function Convert() {
               </div>
             </div>
           </div>
+
+          {/* Conversion history (this session) */}
+          {history.length > 0 && (
+            <div className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">
+              <p className="mb-2 text-sm font-semibold text-ink">Recent conversions</p>
+              <p className="mb-3 text-xs text-ink/35">This session only — clears on reload.</p>
+              <ul className="space-y-1.5">
+                {history.map((h) => (
+                  <li key={h.id}>
+                    <button
+                      onClick={() => { setResult(h.result); setOcrMode(h.result.ocr_used); setError(null); }}
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                        result === h.result ? "bg-moss/10 text-moss" : "text-ink/60 hover:bg-ink/5"
+                      }`}
+                    >
+                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${fileTypeBadge(h.result.filename).color}`}>
+                        {fileTypeBadge(h.result.filename).ext}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{h.result.filename}</span>
+                      <span className="shrink-0 text-ink/30">{h.convertedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* How to use */}
           <div className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">
@@ -226,7 +258,7 @@ export default function Convert() {
           {/* Convert button */}
           <button
             onClick={convert}
-            disabled={!file || loading || !apiReady}
+            disabled={!file || loading || backendStatus !== "connected"}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-moss py-3 text-sm font-semibold text-white disabled:bg-ink/25 hover:bg-moss/90 transition-colors"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <FileCode2 size={16} />}
@@ -237,9 +269,13 @@ export default function Convert() {
               : "Convert to Markdown"}
           </button>
 
-          {!apiReady && (
+          {backendStatus !== "connected" && (
             <p className="rounded-md bg-amber/10 px-4 py-2.5 text-sm text-amber">
-              Set <code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> to your Cloudflare tunnel URL to enable conversion.
+              {backendStatus === "starting"
+                ? "Checking connection to local backend…"
+                : API_URL
+                  ? "Local backend unreachable — start FastAPI + Cloudflare Tunnel, then refresh."
+                  : <>Set <code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> to your Cloudflare tunnel URL to enable conversion.</>}
             </p>
           )}
 
@@ -258,6 +294,9 @@ export default function Convert() {
                 <div className="flex items-center gap-1.5 text-sm">
                   <CheckCircle2 size={14} className="text-fern" />
                   <span className="font-medium text-ink">{result.filename}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${fileTypeBadge(result.filename).color}`}>
+                    {fileTypeBadge(result.filename).ext}
+                  </span>
                   {result.ocr_used && (
                     <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Vision OCR</span>
                   )}

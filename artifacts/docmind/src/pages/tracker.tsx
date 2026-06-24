@@ -28,7 +28,8 @@ import {
   type Stage2Content,
 } from "../lib/supabase";
 
-import { useApiUrl } from "../lib/useApiUrl";
+import { useBackendStatus, type BackendStatus } from "../lib/useBackendStatus";
+import { BackendStatusDot } from "../components/BackendStatusDot";
 
 // Removed static API_URL
 
@@ -48,6 +49,14 @@ const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string; b
   rejected:           { label: "Rejected",  color: "text-ink/40",  bg: "bg-ink/5" },
 };
 const PIPELINE_STATUSES: ApplicationStatus[] = ["pending_processing", "processing", "stage1_complete", "ready"];
+
+function matchScoreAccent(score: number): string {
+  if (score >= 75) return "text-fern border-fern/40";
+  if (score >= 50) return "text-amber border-amber/40";
+  return "text-red-500 border-red-300";
+}
+
+const LOADING_STAGES = ["Comparing resume and JD…", "Extracting missing keywords…", "Scoring your fit…"];
 
 // ---------------------------------------------------------------------------
 // CSV export
@@ -105,16 +114,6 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
       {copied ? <CopyCheck size={11} className="text-fern" /> : <Copy size={11} />}
       {copied ? "Copied!" : label}
     </button>
-  );
-}
-
-function ApiDot({ online }: { online: boolean | null }) {
-  if (online === null) return <span className="inline-block h-2 w-2 rounded-full bg-ink/20 animate-pulse" title="Checking backend…" />;
-  return (
-    <span
-      className={`inline-block h-2 w-2 rounded-full ${online ? "bg-fern" : "bg-amber"}`}
-      title={online ? "Local backend connected" : "Local backend unreachable — set VITE_DOCMIND_API_URL"}
-    />
   );
 }
 
@@ -196,12 +195,14 @@ function Stage2Panel({ content }: { content: Stage2Content }) {
 function QuickSkillsPanel({
   resumes,
   existingApps,
-  backendOnline,
+  backendStatus,
+  apiUrl: API_URL,
   onAdded,
 }: {
   resumes: Resume[];
   existingApps: JobApplication[];
-  backendOnline: boolean | null;
+  backendStatus: BackendStatus;
+  apiUrl: string;
   onAdded: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -213,19 +214,27 @@ function QuickSkillsPanel({
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [trackForm, setTrackForm] = useState({ company: "", role: "", resume_id: resumes[0]?.id ?? "" });
+  const [trackForm, setTrackForm] = useState({
+    company: "",
+    role: "",
+    resume_id: resumes.find((r) => r.status === "ready" && r.is_default)?.id ?? resumes.find((r) => r.status === "ready")?.id ?? "",
+  });
   const [showTrack, setShowTrack] = useState(false);
   const [copiedKeywords, setCopiedKeywords] = useState(false);
-  const API_URL = useApiUrl();
+  const [loadingStage, setLoadingStage] = useState(0);
 
   const readyResumes = resumes.filter((r) => r.status === "ready");
+  const canAnalyse = resumeText.trim().length > 0 && jdText.trim().length > 0;
 
   async function analyse() {
     if (!resumeText.trim() || !jdText.trim()) {
       setErr("Paste both your resume text and the job description.");
       return;
     }
-    setLoading(true); setErr(null); setResult(null); setShowTrack(false); setSaved(false);
+    setLoading(true); setErr(null); setResult(null); setShowTrack(false); setSaved(false); setLoadingStage(0);
+    const stageTimer = setInterval(() => {
+      setLoadingStage((s) => Math.min(s + 1, LOADING_STAGES.length - 1));
+    }, 1700);
     try {
       const res = await fetch(`${API_URL}/extract-skills`, {
         method: "POST",
@@ -237,6 +246,7 @@ function QuickSkillsPanel({
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Request failed");
     } finally {
+      clearInterval(stageTimer);
       setLoading(false);
     }
   }
@@ -291,7 +301,7 @@ function QuickSkillsPanel({
         <Sparkles size={16} className="shrink-0 text-moss" />
         <span className="flex-1 text-sm font-semibold text-ink">Quick Skills Check</span>
         <span className="flex items-center gap-2 text-xs text-ink/40 mr-2">
-          <ApiDot online={backendOnline} />
+          <BackendStatusDot status={backendStatus} apiUrl={API_URL} />
           Paste resume + JD → instant gap analysis
         </span>
         {open ? <ChevronUp size={15} className="shrink-0 text-ink/30" /> : <ChevronDown size={15} className="shrink-0 text-ink/30" />}
@@ -299,9 +309,11 @@ function QuickSkillsPanel({
 
       {open && (
         <div className="border-t border-ink/10 px-5 py-4 space-y-4">
-          {!API_URL && (
+          {backendStatus === "offline" && (
             <p className="rounded-md bg-amber/10 px-3 py-2 text-sm text-amber">
-              Set <code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> to your Cloudflare tunnel URL.
+              {API_URL
+                ? "Local backend unreachable — start FastAPI + Cloudflare Tunnel then refresh."
+                : <>Set <code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> to your Cloudflare tunnel URL.</>}
             </p>
           )}
 
@@ -323,10 +335,10 @@ function QuickSkillsPanel({
           {err && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
 
           <div className="flex items-center gap-3">
-            <button onClick={analyse} disabled={loading || !API_URL}
+            <button onClick={analyse} disabled={loading || backendStatus === "offline" || !canAnalyse}
               className="flex items-center gap-2 rounded-md bg-moss px-5 py-2 text-sm font-semibold text-white disabled:bg-ink/25 hover:bg-moss/90 transition-colors">
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {loading ? "Analysing…" : "Analyse with AI"}
+              {loading ? LOADING_STAGES[loadingStage] : "Analyse with AI"}
             </button>
             {result && !saved && (
               <button onClick={() => setShowTrack((v) => !v)}
@@ -388,7 +400,10 @@ function QuickSkillsPanel({
               <div className="flex items-center gap-5">
                 <ScoreCircle score={result.match_score} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-ink/40 mb-1">Your pitch for this role</p>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-ink/40">Your pitch for this role</p>
+                    <CopyButton text={result.one_line_pitch} label="Copy pitch" />
+                  </div>
                   <p className="text-sm italic text-ink/80 leading-relaxed">"{result.one_line_pitch}"</p>
                 </div>
               </div>
@@ -489,7 +504,12 @@ function AddAppModal({
   onClose: () => void;
   onAdded: () => void;
 }) {
-  const [form, setForm] = useState({ company_name: "", role: "", jd_url: "", resume_id: resumes[0]?.id ?? "" });
+  const [form, setForm] = useState({
+    company_name: "",
+    role: "",
+    jd_url: "",
+    resume_id: resumes.find((r) => r.status === "ready" && r.is_default)?.id ?? resumes.find((r) => r.status === "ready")?.id ?? "",
+  });
   const [jdFile, setJdFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -658,11 +678,13 @@ function ApplicationRow({
           <p className="text-xs text-ink/40">
             {app.application_date ? new Date(app.application_date).toLocaleDateString() : "No date"}
             {app.match_score != null && (
-              <span className="ml-1 font-medium text-moss">· {app.match_score}% match</span>
+              <span className={`ml-1 border-b-2 pb-px font-medium ${matchScoreAccent(app.match_score)}`}>
+                · {app.match_score}% match
+              </span>
             )}
           </p>
         </div>
-        <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color} ${cfg.bg}`}>
+        <div className={`flex min-w-[96px] items-center justify-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color} ${cfg.bg}`}>
           {isProcessing && <Loader2 className="animate-spin" size={11} />}
           {cfg.label}
         </div>
@@ -712,7 +734,12 @@ function ApplicationRow({
               <div className="flex items-center gap-4">
                 <ScoreCircle score={app.stage1_analysis.match_score} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-moss mb-1">AI Analysis</p>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-moss">AI Analysis</p>
+                    <p className="text-[10px] text-ink/35">
+                      Last analysed {new Date(app.updated_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                    </p>
+                  </div>
                   <p className="text-ink/70 italic text-xs leading-relaxed">"{app.stage1_analysis.one_line_pitch}"</p>
                 </div>
               </div>
@@ -820,18 +847,9 @@ export default function Tracker() {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
-  const API_URL = useApiUrl();
-
-  // Backend health probe
-  useEffect(() => {
-    if (!API_URL) { setBackendOnline(false); return; }
-    fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(4000) })
-      .then((r) => setBackendOnline(r.ok))
-      .catch(() => setBackendOnline(false));
-  }, [API_URL]);
+  const { apiUrl: API_URL, status: backendStatus } = useBackendStatus();
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setLoading(false); return; }
@@ -908,10 +926,12 @@ export default function Tracker() {
       )}
 
       {/* Backend health banner */}
-      {API_URL && backendOnline === false && (
+      {backendStatus === "offline" && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber/30 bg-amber/5 px-4 py-2.5 text-sm text-amber">
           <WifiOff size={14} />
-          Local backend unreachable — start FastAPI + Cloudflare Tunnel then refresh.
+          {API_URL
+            ? "Local backend unreachable — start FastAPI + Cloudflare Tunnel then refresh."
+            : <>Set <code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> to your Cloudflare tunnel URL.</>}
         </div>
       )}
 
@@ -919,7 +939,8 @@ export default function Tracker() {
       <QuickSkillsPanel
         resumes={resumes}
         existingApps={apps}
-        backendOnline={backendOnline}
+        backendStatus={backendStatus}
+        apiUrl={API_URL}
         onAdded={fetchAll}
       />
 
@@ -964,9 +985,20 @@ export default function Tracker() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-ink/30">
-          <Loader2 className="animate-spin" size={28} />
-        </div>
+        <ul className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="animate-pulse rounded-lg border border-ink/10 bg-white/80 px-4 py-3 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="h-[18px] w-[18px] shrink-0 rounded bg-ink/10" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 w-2/5 rounded bg-ink/10" />
+                  <div className="h-2.5 w-1/4 rounded bg-ink/5" />
+                </div>
+                <div className="h-6 w-24 shrink-0 rounded-full bg-ink/10" />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : filtered.length === 0 && apps.length > 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center text-ink/40">
           <Filter size={32} className="mb-3" />

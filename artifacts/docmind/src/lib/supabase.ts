@@ -49,6 +49,7 @@ export interface Resume {
   chunk_count: number | null;
   markdown_content: string | null;
   error_message: string | null;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }

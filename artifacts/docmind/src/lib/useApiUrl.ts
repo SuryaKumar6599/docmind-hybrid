@@ -5,59 +5,74 @@ const CONFIG_BUCKET_URL = SUPABASE_URL
   ? `${SUPABASE_URL}/storage/v1/object/public/docmind-config/api_url.json`
   : null;
 
+const REFRESH_INTERVAL_MS = 45_000; // re-check the dynamic tunnel URL every 45s
+
 let cachedApiUrl: string | null = null;
+let cachedConfigUpdatedAt: number | null = null; // epoch seconds, from tunnel_manager.py
+let pollingStarted = false;
+const subscribers = new Set<(url: string) => void>();
 
 function cleanApiUrl(url: string | undefined) {
   return url?.trim().replace(/\/+$/, "") || "";
 }
 
+function broadcast(url: string) {
+  cachedApiUrl = url;
+  subscribers.forEach((fn) => fn(url));
+}
+
+function fetchDynamicUrl(envUrl: string) {
+  if (!CONFIG_BUCKET_URL) return;
+  fetch(`${CONFIG_BUCKET_URL}?t=${Date.now()}`, { cache: "no-store" })
+    .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
+    .then((text) => {
+      const config = JSON.parse(text);
+      const dynamicUrl = cleanApiUrl(config?.api_url as string | undefined);
+      cachedConfigUpdatedAt = typeof config?.updated_at === "number" ? config.updated_at : null;
+      const resolved = dynamicUrl || envUrl;
+      if (resolved && resolved !== cachedApiUrl) broadcast(resolved);
+    })
+    .catch((err) => {
+      // Bucket unreachable or config stale/missing: keep using the last
+      // known-good URL instead of clearing it, and only fall back to the
+      // build-time env var if we've never resolved anything at all.
+      console.warn("[DocMind] Could not refresh dynamic API URL from bucket:", err);
+      if (!cachedApiUrl && envUrl) broadcast(envUrl);
+    });
+}
+
+function startPolling(envUrl: string) {
+  if (pollingStarted) return;
+  pollingStarted = true;
+  fetchDynamicUrl(envUrl);
+  setInterval(() => fetchDynamicUrl(envUrl), REFRESH_INTERVAL_MS);
+}
+
+/** Seconds since the Supabase bucket config (api_url.json) was last written by tunnel_manager.py, or null if unknown. */
+export function getConfigAgeSeconds(): number | null {
+  if (cachedConfigUpdatedAt == null) return null;
+  return Math.max(0, Math.round(Date.now() / 1000) - cachedConfigUpdatedAt);
+}
+
+export function isUsingDynamicConfig(): boolean {
+  return CONFIG_BUCKET_URL !== null;
+}
+
 export function useApiUrl() {
-  const [apiUrl, setApiUrl] = useState<string>("");
+  const [apiUrl, setApiUrl] = useState<string>(cachedApiUrl ?? "");
 
   useEffect(() => {
-    let cancelled = false;
+    subscribers.add(setApiUrl);
 
-    if (cachedApiUrl) {
-      setApiUrl(cachedApiUrl);
-      return;
-    }
-
-    // Fallback only. Vite env values are baked at build time, but Cloudflare
-    // quick-tunnel URLs change at runtime.
     const envUrl = cleanApiUrl(import.meta.env.VITE_DOCMIND_API_URL as string | undefined);
-
-    const useUrl = (url: string) => {
-      if (cancelled || !url) return;
-      cachedApiUrl = url;
-      setApiUrl(url);
-    };
-
-    // 1. Runtime config written by backend/app/tunnel_manager.py on startup.
-    //    This lets the deployed frontend follow changing trycloudflare URLs.
     if (CONFIG_BUCKET_URL) {
-      fetch(`${CONFIG_BUCKET_URL}?t=${Date.now()}`, { cache: "no-store" })
-        .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
-        .then((text) => {
-          const config = JSON.parse(text);
-          const dynamicUrl = cleanApiUrl(config?.api_url as string | undefined);
-          useUrl(dynamicUrl || envUrl);
-        })
-        .catch((err) => {
-          console.warn("[DocMind] Could not fetch dynamic API URL from bucket:", err);
-          useUrl(envUrl);
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    // 2. Env variable for local/offline setups without Supabase config.
-    if (envUrl) {
-      useUrl(envUrl);
+      startPolling(envUrl);
+    } else if (envUrl && !cachedApiUrl) {
+      broadcast(envUrl);
     }
 
     return () => {
-      cancelled = true;
+      subscribers.delete(setApiUrl);
     };
   }, []);
 

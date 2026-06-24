@@ -13,6 +13,10 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
+        # Vercel preview deployments get a random hash/branch suffix on every
+        # PR, so a static origin list can't keep up — match the prod project
+        # by regex instead. Update the slug here if the Vercel project moves.
+        allow_origin_regex=r"https://docmind-hybrid-api-server-wa3m(-[a-z0-9]+)?\.vercel\.app",
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
