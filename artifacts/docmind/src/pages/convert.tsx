@@ -271,7 +271,7 @@ export default function Convert() {
               ? ocrMode
                 ? "Running Vision OCR… (up to 60s for scanned PDFs)"
                 : "Converting with MarkItDown…"
-              : "Convert to Markdown"}
+              : "Convert to Markdown + XML"}
           </button>
 
           {backendStatus !== "connected" && (

@@ -381,7 +381,7 @@ async def extract_skills(
 
 
 # ---------------------------------------------------------------------------
-# Convert (Markdown export — no storage)
+# Convert (Markdown + XML export — no storage)
 # ---------------------------------------------------------------------------
 
 class ConvertResponse(BaseModel):
@@ -399,7 +399,7 @@ async def convert_document(
     file: UploadFile = File(...),
     chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
 ) -> ConvertResponse:
-    """Convert any supported document to clean Markdown.
+    """Convert any supported document to clean Markdown and XML.
 
     Supports: PDF, DOCX, PPTX, Excel, HTML, TXT, MD, CSV, JSON, XML,
               PNG, JPG, GIF, BMP, TIFF, WebP, ZIP.
