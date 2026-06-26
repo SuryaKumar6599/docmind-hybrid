@@ -6,7 +6,7 @@ Endpoints:
   POST /index               — index a document into the vector store
   POST /ask                 — semantic search + RAG answer
   POST /extract-skills      — on-demand job-match gap analysis
-  POST /convert             — convert any document to Markdown (no storage)
+  POST /convert             — convert any document to Markdown + XML (no storage)
   POST /generate-tailored   — stage 2 creative rewrite (used by Intelligence UI)
   POST /export-docx         — render tailored resume as a .docx stream
 """
@@ -30,6 +30,7 @@ import re
 from .config import Settings, get_settings
 from .document_processing import DocumentProcessor, chunk_text
 from .llm_gateway import BaseChatProvider, BaseEmbeddingProvider, get_chat_provider, get_embedding_provider
+from .markdown_to_xml import markdown_to_xml
 from .models import (
     AskRequest,
     AskResponse,
@@ -386,6 +387,7 @@ async def extract_skills(
 class ConvertResponse(BaseModel):
     filename: str
     markdown: str
+    xml: str
     char_count: int
     word_count: int
     estimated_tokens: int
@@ -433,6 +435,7 @@ async def convert_document(
         return ConvertResponse(
             filename=filename,
             markdown=markdown,
+            xml=markdown_to_xml(markdown, source_filename=filename),
             char_count=len(markdown),
             word_count=len(markdown.split()),
             estimated_tokens=len(markdown) // 4,

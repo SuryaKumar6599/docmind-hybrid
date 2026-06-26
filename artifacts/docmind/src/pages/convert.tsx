@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  Code2,
   Copy,
   CopyCheck,
   Download,
@@ -35,6 +36,7 @@ const SUPPORTED_FORMATS = [
 interface ConvertResult {
   filename: string;
   markdown: string;
+  xml: string;
   char_count: number;
   word_count: number;
   estimated_tokens: number;
@@ -64,6 +66,7 @@ export default function Convert() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [viewFormat, setViewFormat] = useState<"markdown" | "xml">("markdown");
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -79,7 +82,7 @@ export default function Convert() {
 
   async function convert() {
     if (!file || !API_URL) return;
-    setLoading(true); setOcrMode(false); setError(null); setResult(null);
+    setLoading(true); setOcrMode(false); setError(null); setResult(null); setViewFormat("markdown");
     try {
       const form = new FormData();
       form.append("file", file);
@@ -96,21 +99,23 @@ export default function Convert() {
     }
   }
 
-  function copyMarkdown() {
+  function copyActive() {
     if (!result) return;
-    navigator.clipboard.writeText(result.markdown).then(() => {
+    const text = viewFormat === "markdown" ? result.markdown : result.xml;
+    navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     });
   }
 
-  function downloadMarkdown() {
+  function downloadFormat(format: "markdown" | "xml") {
     if (!result) return;
-    const blob = new Blob([result.markdown], { type: "text/markdown" });
+    const isMd = format === "markdown";
+    const blob = new Blob([isMd ? result.markdown : result.xml], { type: isMd ? "text/markdown" : "application/xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = result.filename.replace(/\.[^.]+$/, "") + ".md";
+    a.download = result.filename.replace(/\.[^.]+$/, "") + (isMd ? ".md" : ".xml");
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -131,9 +136,9 @@ export default function Convert() {
       {/* Header */}
       <header className="mb-6 border-b border-ink/10 pb-5">
         <p className="text-sm font-semibold text-moss">DocMind</p>
-        <h1 className="mt-1 text-3xl font-semibold text-ink">Markdown Generator</h1>
+        <h1 className="mt-1 text-3xl font-semibold text-ink">Markdown &amp; XML Generator</h1>
         <p className="mt-1 text-sm text-ink/60">
-          Convert any document to clean Markdown using Microsoft MarkItDown — optimised for LLM input prompts.
+          Convert any document to clean Markdown using Microsoft MarkItDown — optimised for LLM input prompts. An XML version of the same extracted content is generated alongside it.
         </p>
       </header>
 
@@ -189,7 +194,7 @@ export default function Convert() {
                 {history.map((h) => (
                   <li key={h.id}>
                     <button
-                      onClick={() => { setResult(h.result); setOcrMode(h.result.ocr_used); setError(null); }}
+                      onClick={() => { setResult(h.result); setOcrMode(h.result.ocr_used); setError(null); setViewFormat("markdown"); }}
                       className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                         result === h.result ? "bg-moss/10 text-moss" : "text-ink/60 hover:bg-ink/5"
                       }`}
@@ -312,23 +317,46 @@ export default function Convert() {
                     <Zap size={11} /> ~{result.estimated_tokens.toLocaleString()} tokens
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={copyMarkdown}
+              </div>
+
+              {/* Format toggle + actions */}
+              <div className="flex flex-wrap items-center gap-3 border-b border-ink/10 bg-paper/50 px-4 py-2.5">
+                <div className="flex rounded-md border border-ink/15 bg-white p-0.5 text-xs font-medium">
+                  <button onClick={() => setViewFormat("markdown")}
+                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
+                      viewFormat === "markdown" ? "bg-moss text-white" : "text-ink/50 hover:text-ink"
+                    }`}>
+                    <FileCode2 size={12} /> Markdown
+                  </button>
+                  <button onClick={() => setViewFormat("xml")}
+                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
+                      viewFormat === "xml" ? "bg-moss text-white" : "text-ink/50 hover:text-ink"
+                    }`}>
+                    <Code2 size={12} /> XML
+                  </button>
+                </div>
+
+                <div className="ml-auto flex gap-2">
+                  <button onClick={copyActive}
                     className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 transition-colors">
                     {copied ? <CopyCheck size={12} className="text-fern" /> : <Copy size={12} />}
-                    {copied ? "Copied!" : "Copy"}
+                    {copied ? "Copied!" : `Copy ${viewFormat === "markdown" ? "Markdown" : "XML"}`}
                   </button>
-                  <button onClick={downloadMarkdown}
+                  <button onClick={() => downloadFormat("markdown")}
+                    className="flex items-center gap-1.5 rounded-md border border-moss/30 px-3 py-1.5 text-xs font-medium text-moss hover:bg-moss/5 transition-colors">
+                    <Download size={12} /> .md
+                  </button>
+                  <button onClick={() => downloadFormat("xml")}
                     className="flex items-center gap-1.5 rounded-md bg-moss px-3 py-1.5 text-xs font-medium text-white hover:bg-moss/90 transition-colors">
-                    <Download size={12} /> Download .md
+                    <Download size={12} /> .xml
                   </button>
                 </div>
               </div>
 
-              {/* Markdown preview */}
+              {/* Preview */}
               <div className="max-h-[560px] overflow-y-auto">
                 <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-ink/80">
-                  {result.markdown}
+                  {viewFormat === "markdown" ? result.markdown : result.xml}
                 </pre>
               </div>
             </div>
