@@ -26,6 +26,7 @@ import {
   type Resume,
   type Stage1Analysis,
   type Stage2Content,
+  withStatusDate,
 } from "../lib/supabase";
 
 import { useBackendStatus, type BackendStatus } from "../lib/useBackendStatus";
@@ -49,6 +50,18 @@ const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string; b
   rejected:           { label: "Rejected",  color: "text-ink/40",  bg: "bg-ink/5" },
 };
 const PIPELINE_STATUSES: ApplicationStatus[] = ["pending_processing", "processing", "stage1_complete", "ready"];
+
+function formatStatusDate(date?: string | null): string {
+  if (!date) return "";
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function statusLabelWithDate(status: ApplicationStatus, app?: JobApplication): string {
+  const date = app?.status_dates?.[status];
+  return date ? `${STATUS_CONFIG[status].label} — ${formatStatusDate(date)}` : STATUS_CONFIG[status].label;
+}
 
 function matchScoreAccent(score: number): string {
   if (score >= 75) return "text-fern border-fern/40";
@@ -272,9 +285,11 @@ function QuickSkillsPanel({
     setSaving(true); setSaveErr(null);
     try {
       if (loadedApplicationId) {
+        const loadedApp = existingApps.find((a) => a.id === loadedApplicationId);
         const { error } = await supabase.from("job_applications").update({
           resume_id: trackForm.resume_id,
           status: "stage1_complete",
+          status_dates: withStatusDate(loadedApp?.status_dates, "stage1_complete"),
           match_score: result!.match_score,
           stage1_analysis: result,
           jd_content: jdText,
@@ -296,6 +311,7 @@ function QuickSkillsPanel({
           company_name: trackForm.company,
           role: trackForm.role,
           status: "stage1_complete",
+          status_dates: withStatusDate(undefined, "stage1_complete"),
           match_score: result!.match_score,
           stage1_analysis: result,
           jd_content: jdText,
@@ -603,6 +619,7 @@ function AddAppModal({
         if (error) throw new Error(error.message);
         jdStoragePath = path;
       }
+      const initialStatus: ApplicationStatus = jdStoragePath ? "pending_processing" : "to_apply";
       const { error } = await supabase.from("job_applications").insert({
         user_id: userId,
         resume_id: form.resume_id,
@@ -610,7 +627,8 @@ function AddAppModal({
         role: form.role,
         jd_url: form.jd_url || null,
         jd_storage_path: jdStoragePath,
-        status: jdStoragePath ? "pending_processing" : "to_apply",
+        status: initialStatus,
+        status_dates: withStatusDate(undefined, initialStatus),
         application_date: new Date().toISOString().split("T")[0],
       });
       if (error) throw new Error(error.message);
@@ -707,6 +725,7 @@ function ApplicationRow({
   const [notesSaved, setNotesSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<"analysis" | "tailored" | "jd" | "notes">("analysis");
   const cfg = STATUS_CONFIG[app.status];
+  const currentStatusDate = app.status_dates?.[app.status];
   const isProcessing = PIPELINE_STATUSES.includes(app.status) && app.status !== "ready";
 
   async function saveNotes() {
@@ -732,6 +751,7 @@ function ApplicationRow({
                 · {app.match_score}% match
               </span>
             )}
+            {currentStatusDate && <span className="ml-1">· {STATUS_CONFIG[app.status].label} on {formatStatusDate(currentStatusDate)}</span>}
           </p>
         </div>
         <div className={`flex min-w-[96px] items-center justify-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color} ${cfg.bg}`}>
@@ -749,7 +769,7 @@ function ApplicationRow({
             <select value={app.status} onChange={(e) => onStatusChange(app.id, e.target.value as ApplicationStatus)}
               className="rounded-md border border-ink/15 bg-paper px-2 py-1 text-sm">
               {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
-                <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+                <option key={s} value={s}>{statusLabelWithDate(s, app)}</option>
               ))}
             </select>
             <a href={`/intelligence?application_id=${app.id}`}
@@ -949,8 +969,10 @@ export default function Tracker() {
   }
 
   async function updateStatus(id: string, status: ApplicationStatus) {
-    await supabase.from("job_applications").update({ status }).eq("id", id);
-    setApps((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+    const app = apps.find((a) => a.id === id);
+    const statusDates = withStatusDate(app?.status_dates, status);
+    await supabase.from("job_applications").update({ status, status_dates: statusDates }).eq("id", id);
+    setApps((prev) => prev.map((a) => (a.id === id ? { ...a, status, status_dates: statusDates } : a)));
   }
 
   async function saveNotes(id: string, notes: string) {

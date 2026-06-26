@@ -57,6 +57,7 @@ create table if not exists job_applications (
   jd_storage_path  text,
   status           text not null default 'to_apply',
   application_date date,
+  status_dates     jsonb not null default '{}'::jsonb,
   match_score      int check (match_score between 0 and 100),
   stage1_analysis  jsonb,
   stage2_content   jsonb,
@@ -70,6 +71,7 @@ create table if not exists job_applications (
 create index if not exists apps_user_idx   on job_applications(user_id);
 create index if not exists apps_status_idx on job_applications(status);
 create index if not exists apps_resume_idx on job_applications(resume_id);
+create index if not exists apps_status_dates_gin_idx on job_applications using gin (status_dates);
 
 -- 5. RPCs
 create or replace function match_documents(query_embedding vector(768), match_count int default 5)

@@ -77,6 +77,7 @@ create table if not exists job_applications (
   --   stage1_complete | ready | error
   --   applied | interview | offer | rejected
   application_date date,
+  status_dates     jsonb not null default '{}'::jsonb,
   match_score      int check (match_score between 0 and 100),
   stage1_analysis  jsonb,                        -- JobMatchAnalysis output
   stage2_content   jsonb,                        -- TailoredContent output
@@ -91,6 +92,7 @@ create table if not exists job_applications (
 create index if not exists job_apps_user_id_idx  on job_applications(user_id);
 create index if not exists job_apps_status_idx   on job_applications(status);
 create index if not exists job_apps_resume_id_idx on job_applications(resume_id);
+create index if not exists job_apps_status_dates_gin_idx on job_applications using gin (status_dates);
 
 -- ============================================================
 -- 5. RPC: match_documents (cross-document semantic search)

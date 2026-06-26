@@ -39,6 +39,20 @@ export type ApplicationStatus =
   | "offer"
   | "rejected";
 
+export type ApplicationStatusDates = Partial<Record<ApplicationStatus, string>>;
+
+export function todayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function withStatusDate(
+  dates: ApplicationStatusDates | null | undefined,
+  status: ApplicationStatus,
+  date = todayDateString(),
+): ApplicationStatusDates {
+  return { ...(dates ?? {}), [status]: date };
+}
+
 export interface Resume {
   id: string;
   user_id: string;
@@ -94,6 +108,7 @@ export interface JobApplication {
   jd_content: string | null;
   status: ApplicationStatus;
   application_date: string | null;
+  status_dates: ApplicationStatusDates | null;
   match_score: number | null;
   stage1_analysis: Stage1Analysis | null;
   stage2_content: Stage2Content | null;

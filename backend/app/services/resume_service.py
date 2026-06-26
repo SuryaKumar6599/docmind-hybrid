@@ -1,6 +1,7 @@
 """Resume Service — Handles Resume Analysis and Tailoring."""
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import tempfile
 from pathlib import Path
@@ -24,6 +25,12 @@ from ..prompts import (
 from ..schemas import JobMatchAnalysis, TailoredContent
 
 logger = logging.getLogger(__name__)
+
+
+def _with_status_date(row: dict[str, Any], status: str) -> dict[str, str]:
+    dates = dict(row.get("status_dates") or {})
+    dates[status] = dt.date.today().isoformat()
+    return dates
 
 
 # ---------------------------------------------------------------------------
@@ -123,10 +130,12 @@ def process_tailoring(
         logger.info("[APP %s] Stage 1 complete — match_score=%d", app_id, analysis.match_score)
 
         # Update DB with Stage 1 results
+        row["status_dates"] = _with_status_date(row, "stage1_complete")
         supa.table("job_applications").update({
             "match_score": analysis.match_score,
             "stage1_analysis": analysis.model_dump(),
             "status": "stage1_complete",
+            "status_dates": row["status_dates"],
         }).eq("id", app_id).execute()
 
         # --- Stage 2: Creative rewrite ---
@@ -188,8 +197,10 @@ def process_tailoring(
             )
 
         # --- Final update ---
+        row["status_dates"] = _with_status_date(row, "ready")
         supa.table("job_applications").update({
             "status": "ready",
+            "status_dates": row["status_dates"],
             "stage2_content": tailored.model_dump(),
             "docx_url": docx_url,
             "pdf_url": pdf_url,

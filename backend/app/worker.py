@@ -9,6 +9,7 @@ Architecture (Async Worker Pattern):
 """
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import time
 import traceback
@@ -102,6 +103,7 @@ def run_polling_loop(settings: Settings) -> None:
                     logger.error("[APP %s] Failed:\n%s", row["id"], tb)
                     supa.table("job_applications").update({
                         "status": "error",
+                        "status_dates": _with_status_date(row, "error"),
                         "error_message": tb[-1000:],
                     }).eq("id", row["id"]).execute()
 

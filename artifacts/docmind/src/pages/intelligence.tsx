@@ -29,6 +29,7 @@ import {
   type Stage1Analysis,
   type Stage2Content,
   type RewrittenBullet,
+  withStatusDate,
 } from "../lib/supabase";
 import { useApiUrl } from "../lib/useApiUrl";
 import { analysisCacheKey } from "../lib/promptVersion";
@@ -441,6 +442,7 @@ export default function Intelligence() {
         stage2_content: tailoredData,
         jd_content: jdText,
         status: "ready" as const,
+        status_dates: withStatusDate(existing?.status_dates, "ready"),
       };
 
       if (existing) {
