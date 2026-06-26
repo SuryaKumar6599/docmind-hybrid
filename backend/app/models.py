@@ -15,6 +15,7 @@ class Citation(BaseModel):
     chunk_id: str
     document_name: str
     quote: str = ""
+    application_id: str | None = None
 
 
 class SourceChunk(BaseModel):

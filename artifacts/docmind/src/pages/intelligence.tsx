@@ -556,8 +556,36 @@ export default function Intelligence() {
       }
       const blob = await res.blob();
       const dateStr = new Date().toISOString().split("T")[0];
-      const safe = company.replace(/\s+/g, "_").replace(/\//g, "-");
-      triggerDownload(blob, `Tailored_Resume_${safe}_${dateStr}.docx`);
+      const safeCompany = safeFilenamePart(company);
+      const safeRole = safeFilenamePart(role);
+      const filename = `Tailored_Resume_${safeCompany}_${dateStr}.docx`;
+
+      if (isSupabaseConfigured) {
+        const targetAppId = linkedApplicationId || existingApps.find(
+          (a) => a.company_name.toLowerCase() === company.trim().toLowerCase() &&
+                 a.role.toLowerCase() === role.trim().toLowerCase()
+        )?.id;
+
+        if (targetAppId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          const userId = user?.id ?? "anonymous";
+          const storagePath = `${userId}/${targetAppId}/${Date.now()}_${safeCompany}_${safeRole}.docx`;
+          const { error: uploadErr } = await supabase.storage
+            .from("tailored-resumes")
+            .upload(storagePath, blob, { contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", upsert: true });
+          if (uploadErr) throw new Error(uploadErr.message);
+
+          const { error: updateErr } = await supabase
+            .from("job_applications")
+            .update({ docx_url: `tailored-resumes:${storagePath}` })
+            .eq("id", targetAppId);
+          if (updateErr) throw new Error(updateErr.message);
+          setLinkedApplicationId(targetAppId);
+          setPersistStatus("saved");
+        }
+      }
+
+      triggerDownload(blob, filename);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Download failed.");
     } finally {

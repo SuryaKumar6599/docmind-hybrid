@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Bot,
+  ExternalLink,
   FileUp,
   Hash,
   Loader2,
@@ -26,6 +27,7 @@ type Citation = {
   chunk_id: string;
   document_name: string;
   quote?: string;
+  application_id?: string | null;
 };
 
 type IndexedDoc = {
@@ -497,8 +499,18 @@ function MessageBubble({ message }: { message: ChatMessage }) {
               ))}
             </div>
             {message.citations.map((c) => (
-              openCitation === c.chunk_id && c.quote && (
-                <p key={c.chunk_id} className="mt-2 rounded-md border border-ink/10 bg-paper p-3 text-sm text-ink/75">{c.quote}</p>
+              openCitation === c.chunk_id && (c.quote || c.application_id) && (
+                <div key={c.chunk_id} className="mt-2 rounded-md border border-ink/10 bg-paper p-3 text-sm text-ink/75">
+                  {c.quote && <p>{c.quote}</p>}
+                  {c.application_id && (
+                    <a
+                      href={`/tracker?application_id=${c.application_id}`}
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-moss hover:underline"
+                    >
+                      <ExternalLink size={12} /> Open linked application in Tracker
+                    </a>
+                  )}
+                </div>
               )
             ))}
           </div>

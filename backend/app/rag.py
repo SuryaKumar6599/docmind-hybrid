@@ -106,6 +106,7 @@ class LocalRAG:
             for s in sources
         )
         allowed_ids: set[str] = {s.id for s in sources}
+        source_by_id = {s.id: s for s in sources}
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self.SYSTEM_PROMPT},
@@ -148,6 +149,7 @@ class LocalRAG:
                         chunk_id=item.chunk_id,
                         document_name=item.document_name,
                         quote=item.quote[:500],
+                        application_id=source_by_id[item.chunk_id].metadata.get("application_id"),
                     )
                 )
             else:
@@ -185,6 +187,7 @@ class LocalRAG:
             for s in sources
         )
         allowed_ids: set[str] = {s.id for s in sources}
+        source_by_id = {s.id: s for s in sources}
 
         messages = [
             {"role": "system", "content": self.SYSTEM_PROMPT},
@@ -255,6 +258,7 @@ class LocalRAG:
                         "chunk_id": item.chunk_id,
                         "document_name": item.document_name,
                         "quote": item.quote[:500],
+                        "application_id": source_by_id[item.chunk_id].metadata.get("application_id"),
                     })
         except Exception as exc:
             logger.error("Citation extraction failed: %s", exc)

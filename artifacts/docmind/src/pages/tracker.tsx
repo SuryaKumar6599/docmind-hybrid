@@ -64,6 +64,25 @@ function statusLabelWithDate(status: ApplicationStatus, app?: JobApplication): s
   return date ? `${STATUS_CONFIG[status].label} — ${formatStatusDate(date)}` : STATUS_CONFIG[status].label;
 }
 
+function daysBetween(start?: string | null, end?: string | null): number | null {
+  if (!start || !end) return null;
+  const startTime = new Date(`${start}T00:00:00`).getTime();
+  const endTime = new Date(`${end}T00:00:00`).getTime();
+  if (Number.isNaN(startTime) || Number.isNaN(endTime)) return null;
+  return Math.max(0, Math.round((endTime - startTime) / 86400000));
+}
+
+async function openStorageUrl(bucket: string, value: string) {
+  if (/^https?:\/\//.test(value)) {
+    window.open(value, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const path = value.replace(`${bucket}:`, "");
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
+  if (error || !data?.signedUrl) throw new Error(error?.message ?? "Unable to create download link.");
+  window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+}
+
 function matchScoreAccent(score: number): string {
   if (score >= 75) return "text-fern border-fern/40";
   if (score >= 50) return "text-amber border-amber/40";
@@ -715,17 +734,41 @@ function ApplicationRow({
   app,
   onStatusChange,
   onNotesSave,
+  highlighted = false,
 }: {
   app: JobApplication;
   onStatusChange: (id: string, status: ApplicationStatus) => void;
   onNotesSave: (id: string, notes: string) => void;
+  highlighted?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(highlighted);
   const [notes, setNotes] = useState(app.notes ?? "");
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
+  const [downloadingDocx, setDownloadingDocx] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"analysis" | "tailored" | "jd" | "notes">("analysis");
   const cfg = STATUS_CONFIG[app.status];
+  const statusTimeline = (Object.keys(STATUS_CONFIG) as ApplicationStatus[])
+    .map((status) => ({ status, date: app.status_dates?.[status] }))
+    .filter((item): item is { status: ApplicationStatus; date: string } => Boolean(item.date));
+
+  useEffect(() => {
+    if (highlighted) setExpanded(true);
+  }, [highlighted]);
+
+  async function handleDocxDownload() {
+    if (!app.docx_url || downloadingDocx) return;
+    setDownloadingDocx(true);
+    setDownloadError(null);
+    try {
+      await openStorageUrl("tailored-resumes", app.docx_url);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Download failed.");
+    } finally {
+      setDownloadingDocx(false);
+    }
+  }
   const currentStatusDate = app.status_dates?.[app.status];
   const isProcessing = PIPELINE_STATUSES.includes(app.status) && app.status !== "ready";
 
@@ -738,7 +781,7 @@ function ApplicationRow({
   }
 
   return (
-    <li className="rounded-lg border border-ink/10 bg-white/80 shadow-sm">
+    <li className={`rounded-lg border bg-white/80 shadow-sm ${highlighted ? "border-moss/50 ring-2 ring-moss/15" : "border-ink/10"}`}>
       <div className="flex cursor-pointer items-center gap-4 px-4 py-3" onClick={() => setExpanded((v) => !v)}>
         <Briefcase className="shrink-0 text-ink/30" size={18} />
         <div className="min-w-0 flex-1">
@@ -795,6 +838,15 @@ function ApplicationRow({
                 <Sparkles size={13} /> Tailor Resume
               </a>
             </div>
+            {statusTimeline.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {statusTimeline.map(({ status, date }) => (
+                  <span key={status} className="rounded-full border border-ink/10 bg-white px-2 py-0.5 text-[11px] text-ink/55">
+                    {STATUS_CONFIG[status].label}: {formatStatusDate(date)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tab bar (only if there's content) */}
@@ -919,10 +971,10 @@ function ApplicationRow({
           {(app.docx_url || app.pdf_url) && (
             <div className="flex gap-3 pt-1">
               {app.docx_url && (
-                <a href={app.docx_url}
-                  className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5">
-                  <Download size={13} /> Download DOCX
-                </a>
+                <button type="button" onClick={handleDocxDownload} disabled={downloadingDocx}
+                  className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-50">
+                  {downloadingDocx ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Download DOCX
+                </button>
               )}
               {app.pdf_url && (
                 <a href={app.pdf_url}
@@ -931,6 +983,10 @@ function ApplicationRow({
                 </a>
               )}
             </div>
+          )}
+
+          {downloadError && (
+            <p className="text-xs text-red-500">{downloadError}</p>
           )}
 
           {/* Error */}
@@ -1006,6 +1062,17 @@ export default function Tracker() {
     (acc, s) => ({ ...acc, [s]: apps.filter((a) => a.status === s).length }),
     {} as Record<ApplicationStatus, number>
   );
+  const highlightedApplicationId = new URLSearchParams(window.location.search).get("application_id");
+  const appliedDurations = apps
+    .map((a) => daysBetween(a.status_dates?.to_apply ?? a.application_date, a.status_dates?.applied))
+    .filter((value): value is number => value != null);
+  const avgDaysToApply = appliedDurations.length
+    ? Math.round(appliedDurations.reduce((sum, value) => sum + value, 0) / appliedDurations.length)
+    : null;
+  const interviewsThisMonth = apps.filter((a) => {
+    const date = a.status_dates?.interview;
+    return date && date.startsWith(new Date().toISOString().slice(0, 7));
+  }).length;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -1070,6 +1137,23 @@ export default function Tracker() {
         </div>
       )}
 
+      {apps.length > 0 && (
+        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-ink/10 bg-white/80 p-3">
+            <p className="text-xs text-ink/45">Avg. to apply</p>
+            <p className="mt-1 text-xl font-semibold text-ink">{avgDaysToApply == null ? "--" : `${avgDaysToApply}d`}</p>
+          </div>
+          <div className="rounded-lg border border-ink/10 bg-white/80 p-3">
+            <p className="text-xs text-ink/45">Interviews this month</p>
+            <p className="mt-1 text-xl font-semibold text-moss">{interviewsThisMonth}</p>
+          </div>
+          <div className="rounded-lg border border-ink/10 bg-white/80 p-3">
+            <p className="text-xs text-ink/45">Ready to send</p>
+            <p className="mt-1 text-xl font-semibold text-fern">{counts.ready}</p>
+          </div>
+        </div>
+      )}
+
       {/* Filter/search bar */}
       {apps.length > 0 && (
         <div className="mb-4 flex gap-2">
@@ -1123,7 +1207,13 @@ export default function Tracker() {
       ) : (
         <ul className="space-y-3">
           {filtered.map((app) => (
-            <ApplicationRow key={app.id} app={app} onStatusChange={updateStatus} onNotesSave={saveNotes} />
+            <ApplicationRow
+              key={app.id}
+              app={app}
+              onStatusChange={updateStatus}
+              onNotesSave={saveNotes}
+              highlighted={app.id === highlightedApplicationId}
+            />
           ))}
         </ul>
       )}

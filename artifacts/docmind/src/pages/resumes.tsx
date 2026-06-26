@@ -30,11 +30,13 @@ function ResumeRow({
   onDelete,
   onSetDefault,
   childCount,
+  parentResume,
 }: {
   resume: Resume;
   onDelete: (id: string) => void;
   onSetDefault: (resume: Resume) => void;
   childCount: number;
+  parentResume?: Resume;
 }) {
   const cfg = STATUS_CONFIG[resume.status];
   const Icon = cfg.icon;
@@ -42,6 +44,7 @@ function ResumeRow({
   const [deleting, setDeleting] = useState(false);
   const [settingDefault, setSettingDefault] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   const wordCount = resume.markdown_content
     ? resume.markdown_content.trim().split(/\s+/).filter(Boolean).length
@@ -165,6 +168,12 @@ function ResumeRow({
               <span>~{Math.round(resume.markdown_content.length / 4).toLocaleString()} tokens</span>
             </div>
             <div className="flex gap-2">
+              {parentResume?.markdown_content && (
+                <button onClick={() => setCompareOpen((value) => !value)}
+                  className="flex items-center gap-1.5 rounded-md border border-moss/20 px-2.5 py-1 text-xs text-moss hover:bg-moss/5 transition-colors">
+                  <FileText size={11} /> {compareOpen ? "Hide compare" : "Compare base"}
+                </button>
+              )}
               <button onClick={copyMarkdown}
                 className="flex items-center gap-1.5 rounded-md border border-ink/10 px-2.5 py-1 text-xs text-ink/50 hover:bg-ink/5 hover:text-ink transition-colors">
                 {copied ? <CopyCheck size={11} className="text-fern" /> : <Copy size={11} />}
@@ -180,6 +189,22 @@ function ResumeRow({
               </button>
             </div>
           </div>
+          {compareOpen && parentResume?.markdown_content && (
+            <div className="grid gap-3 border-b border-ink/10 p-4 md:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-semibold text-ink/45">Base: {parentResume.original_filename}</p>
+                <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-white p-3 font-mono text-xs leading-relaxed text-ink/65">
+                  {parentResume.markdown_content}
+                </pre>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold text-moss">Tailored: {resume.original_filename}</p>
+                <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-white p-3 font-mono text-xs leading-relaxed text-ink/75">
+                  {resume.markdown_content}
+                </pre>
+              </div>
+            </div>
+          )}
           <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-ink/70">
             {resume.markdown_content}
           </pre>
@@ -284,6 +309,10 @@ export default function Resumes() {
     if (resume.parent_resume_id) acc[resume.parent_resume_id] = (acc[resume.parent_resume_id] ?? 0) + 1;
     return acc;
   }, {});
+  const resumeById = resumes.reduce<Record<string, Resume>>((acc, resume) => {
+    acc[resume.id] = resume;
+    return acc;
+  }, {});
   const orderedResumes = [...resumes].sort((a, b) => {
     if (a.parent_resume_id === b.id) return 1;
     if (b.parent_resume_id === a.id) return -1;
@@ -370,7 +399,14 @@ export default function Resumes() {
       ) : (
         <ul className="space-y-3">
           {orderedResumes.map((resume) => (
-            <ResumeRow key={resume.id} resume={resume} onDelete={handleDelete} onSetDefault={handleSetDefault} childCount={childCounts[resume.id] ?? 0} />
+            <ResumeRow
+              key={resume.id}
+              resume={resume}
+              onDelete={handleDelete}
+              onSetDefault={handleSetDefault}
+              childCount={childCounts[resume.id] ?? 0}
+              parentResume={resume.parent_resume_id ? resumeById[resume.parent_resume_id] : undefined}
+            />
           ))}
         </ul>
       )}
