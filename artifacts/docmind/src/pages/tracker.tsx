@@ -8,6 +8,7 @@ import {
   CopyCheck,
   Download,
   ExternalLink,
+  FileCode2,
   FileText,
   Filter,
   Loader2,
@@ -763,25 +764,37 @@ function ApplicationRow({
 
       {expanded && (
         <div className="border-t border-ink/10 px-4 py-4 space-y-4">
-          {/* Status + JD link */}
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-ink/50">Status:</span>
-            <select value={app.status} onChange={(e) => onStatusChange(app.id, e.target.value as ApplicationStatus)}
-              className="rounded-md border border-ink/15 bg-paper px-2 py-1 text-sm">
-              {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
-                <option key={s} value={s}>{statusLabelWithDate(s, app)}</option>
-              ))}
-            </select>
-            <a href={`/intelligence?application_id=${app.id}`}
-              className="ml-auto flex items-center gap-1 rounded-md border border-moss/30 px-2.5 py-1 text-xs font-medium text-moss hover:bg-moss/5">
-              <Sparkles size={12} /> Tailor in Intelligence
-            </a>
-            {app.jd_url && (
-              <a href={app.jd_url} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1 text-xs text-signal hover:underline">
-                <ExternalLink size={12} /> Source JD
+          {/* Command center */}
+          <div className="rounded-lg border border-moss/15 bg-moss/5 p-3">
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <span className="text-xs font-medium text-ink/50">Status:</span>
+              <select value={app.status} onChange={(e) => onStatusChange(app.id, e.target.value as ApplicationStatus)}
+                className="rounded-md border border-ink/15 bg-white px-2 py-1 text-sm">
+                {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
+                  <option key={s} value={s}>{statusLabelWithDate(s, app)}</option>
+                ))}
+              </select>
+              {app.jd_url && (
+                <a href={app.jd_url} target="_blank" rel="noreferrer"
+                  className="ml-auto flex items-center gap-1 text-xs text-signal hover:underline">
+                  <ExternalLink size={12} /> Source JD
+                </a>
+              )}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <a href={`/convert?application_id=${app.id}&category=job_description`}
+                className="flex items-center justify-center gap-1.5 rounded-md border border-ink/10 bg-white px-3 py-2 text-xs font-medium text-ink hover:bg-ink/5">
+                <FileCode2 size={13} /> Convert / Attach JD
               </a>
-            )}
+              <a href={`/?application_id=${app.id}&category=job_description&q=${encodeURIComponent(`What should I improve for ${app.role} at ${app.company_name}?`)}`}
+                className="flex items-center justify-center gap-1.5 rounded-md border border-ink/10 bg-white px-3 py-2 text-xs font-medium text-ink hover:bg-ink/5">
+                <Search size={13} /> Ask Search
+              </a>
+              <a href={`/intelligence?application_id=${app.id}`}
+                className="flex items-center justify-center gap-1.5 rounded-md bg-moss px-3 py-2 text-xs font-semibold text-white hover:bg-moss/90">
+                <Sparkles size={13} /> Tailor Resume
+              </a>
+            </div>
           </div>
 
           {/* Tab bar (only if there's content) */}

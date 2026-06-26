@@ -90,9 +90,20 @@ export default function Convert() {
   }
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const category = params.get("category");
+    if (category) setIndexCategory(category);
     if (!isSupabaseConfigured) return;
     fetchApplications();
   }, []);
+
+  useEffect(() => {
+    const appId = new URLSearchParams(window.location.search).get("application_id");
+    if (appId && applications.some((app) => app.id === appId)) {
+      setSelectedApplicationId(appId);
+      setActionStatus({ type: "idle", text: "" });
+    }
+  }, [applications]);
 
   async function fetchApplications() {
     const { data } = await supabase
@@ -226,6 +237,7 @@ export default function Convert() {
       const form = new FormData();
       form.append("file", new File([result.markdown], `${safeBaseName(result.filename)}.md`, { type: "text/markdown" }));
       form.append("category", indexCategory);
+      if (selectedApplicationId) form.append("application_id", selectedApplicationId);
       const res = await fetch(`${API_URL}/index`, { method: "POST", body: form });
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
       const indexed = await res.json();
@@ -267,6 +279,12 @@ export default function Convert() {
             </div>
             <BackendStatusDot status={backendStatus} apiUrl={API_URL} />
           </div>
+
+          {selectedApplicationId && (
+            <div className="rounded-lg border border-moss/20 bg-moss/5 p-4 text-sm text-moss shadow-sm">
+              Opened from Tracker. Converted Markdown can be attached directly to the selected application.
+            </div>
+          )}
 
           {/* Supported formats */}
           <div className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">

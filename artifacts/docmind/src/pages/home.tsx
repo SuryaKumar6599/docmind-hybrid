@@ -13,7 +13,7 @@ import {
   User,
   Zap,
 } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { supabase, isSupabaseConfigured, type JobApplication } from "../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 
 type ChatMessage = {
@@ -72,6 +72,7 @@ export default function Home() {
   const [isAsking, setIsAsking] = useState(false);
   const [uploadCategory, setUploadCategory] = useState("general");
   const [searchCategory, setSearchCategory] = useState("general");
+  const [linkedApplication, setLinkedApplication] = useState<JobApplication | null>(null);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -79,6 +80,26 @@ export default function Home() {
     const dropped = e.dataTransfer.files[0];
     if (dropped) setFile(dropped);
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const category = params.get("category");
+    const query = params.get("q");
+    const appId = params.get("application_id");
+    if (category) {
+      setSearchCategory(category);
+      setUploadCategory(category);
+    }
+    if (query) setQuestion(query);
+    if (appId && isSupabaseConfigured) {
+      supabase
+        .from("job_applications")
+        .select("*")
+        .eq("id", appId)
+        .maybeSingle()
+        .then(({ data }) => setLinkedApplication((data as JobApplication | null) ?? null));
+    }
+  }, []);
 
   useEffect(() => {
     // Listen for status updates on documents we are tracking
@@ -276,6 +297,13 @@ export default function Home() {
           </section>
 
           <BackendDebugPanel apiUrl={API_URL} />
+
+          {linkedApplication && (
+            <section className="rounded-lg border border-moss/20 bg-moss/5 p-4 text-sm text-moss shadow-sm">
+              <p className="font-semibold">Search opened from Tracker</p>
+              <p className="mt-1 text-xs text-moss/80">{linkedApplication.role} @ {linkedApplication.company_name}</p>
+            </section>
+          )}
 
           {/* Upload */}
           <section className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">

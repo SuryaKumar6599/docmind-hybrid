@@ -217,6 +217,7 @@ async def root() -> dict[str, object]:
 async def index_document(
     file: UploadFile = File(...),
     category: str = Form("general"),
+    application_id: str | None = Form(None),
     store: SupabaseVectorStore = Depends(get_store),
     chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
     embedding_provider: BaseEmbeddingProvider = Depends(get_embedding_provider_dep),
@@ -240,9 +241,12 @@ async def index_document(
             raise HTTPException(status_code=422, detail="Document produced no extractable text.")
 
         # Create document record first, then embed + insert chunks in bulk.
+        metadata = {"source": filename, "char_count": len(markdown), "category": category}
+        if application_id:
+            metadata["application_id"] = application_id
         document_id = store.create_document(
             name=filename,
-            metadata={"source": filename, "char_count": len(markdown), "category": category},
+            metadata=metadata,
             category=category,
         )
         embeddings = [embedding_provider.embed(chunk) for chunk in chunks]
@@ -250,7 +254,7 @@ async def index_document(
             document_id=document_id,
             chunks=chunks,
             embeddings=embeddings,
-            metadata={"filename": filename, "category": category},
+            metadata={"filename": filename, "category": category, **({"application_id": application_id} if application_id else {})},
         )
 
         logger.info("Indexed %d chunks for '%s' (doc_id=%s)", len(chunks), filename, document_id)
