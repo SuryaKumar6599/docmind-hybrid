@@ -1,0 +1,428 @@
+diff --git a/artifacts/docmind/src/lib/promptVersion.ts b/artifacts/docmind/src/lib/promptVersion.ts
+new file mode 100644
+index 0000000..f656d5f
+--- /dev/null
++++ b/artifacts/docmind/src/lib/promptVersion.ts
+@@ -0,0 +1,27 @@
++/**
++ * Bump this whenever the backend's /extract-skills or /generate-tailored
++ * prompts change in a way that would make previously cached results stale
++ * or wrong. Cached entries are keyed on this value, so bumping it
++ * effectively invalidates every existing cache entry at once.
++ */
++export const PROMPT_VERSION = "v1";
++
++/** SHA-256 hex digest via the Web Crypto API (no extra dependency). */
++export async function sha256Hex(input: string): Promise<string> {
++  const bytes = new TextEncoder().encode(input);
++  const digest = await crypto.subtle.digest("SHA-256", bytes);
++  return Array.from(new Uint8Array(digest))
++    .map((b) => b.toString(16).padStart(2, "0"))
++    .join("");
++}
++
++/** Cache key for a resume+JD(+company/role) analysis pair. Replaces the old
++ * `ai_cache_${resumeId}_${company}_${role}_${jdText.length}` key, which
++ * collided whenever two different JDs happened to have the same length.
++ * company/role are kept in the key (unlike a strict resumeId+jdContent
++ * hash) because /generate-tailored takes them as real inputs — dropping
++ * them would let two different roles share a stale tailored-resume cache
++ * entry for the same resume+JD pair. */
++export async function analysisCacheKey(resumeId: string, jdContent: string, company: string, role: string): Promise<string> {
++  return `ai_cache_${await sha256Hex(`${resumeId}:${jdContent}:${company.trim().toLowerCase()}:${role.trim().toLowerCase()}:${PROMPT_VERSION}`)}`;
++}
+diff --git a/artifacts/docmind/src/lib/supabase.ts b/artifacts/docmind/src/lib/supabase.ts
+index 1732695..86319fb 100644
+--- a/artifacts/docmind/src/lib/supabase.ts
++++ b/artifacts/docmind/src/lib/supabase.ts
+@@ -90,6 +90,7 @@ export interface JobApplication {
+   role: string;
+   jd_url: string | null;
+   jd_storage_path: string | null;
++  jd_content: string | null;
+   status: ApplicationStatus;
+   application_date: string | null;
+   match_score: number | null;
+diff --git a/artifacts/docmind/src/pages/intelligence.tsx b/artifacts/docmind/src/pages/intelligence.tsx
+index 16ea278..b85dc1b 100644
+--- a/artifacts/docmind/src/pages/intelligence.tsx
++++ b/artifacts/docmind/src/pages/intelligence.tsx
+@@ -24,11 +24,13 @@ import {
+   supabase,
+   isSupabaseConfigured,
+   type Resume,
++  type JobApplication,
+   type Stage1Analysis,
+   type Stage2Content,
+   type RewrittenBullet,
+ } from "../lib/supabase";
+ import { useApiUrl } from "../lib/useApiUrl";
++import { analysisCacheKey } from "../lib/promptVersion";
+ 
+ // ── helpers ──────────────────────────────────────────────────────────────────
+ 
+@@ -181,6 +183,10 @@ function useSessionState<T>(key: string, initialValue: T): [T, React.Dispatch<Re
+ 
+ export default function Intelligence() {
+   const [resumes, setResumes] = useState<Resume[]>([]);
++  const [existingApps, setExistingApps] = useState<JobApplication[]>([]);
++  const [linkedApplicationId, setLinkedApplicationId] = useSessionState<string>("docmind_linkedAppId", "");
++  const [persistStatus, setPersistStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
++  const [persistError, setPersistError] = useState<string | null>(null);
+   const [selectedResumeId, setSelectedResumeId] = useSessionState<string>("docmind_resumeId", "");
+   const [jdText, setJdText] = useSessionState("docmind_jdText", "");
+   const [company, setCompany] = useSessionState("docmind_company", "");
+@@ -218,7 +224,10 @@ export default function Intelligence() {
+     : [];
+ 
+   useEffect(() => {
+-    if (isSupabaseConfigured) fetchResumes();
++    if (isSupabaseConfigured) {
++      fetchResumes();
++      fetchExistingApps();
++    }
+   }, []);
+ 
+   // Warn before closing if there is active work
+@@ -262,6 +271,14 @@ export default function Intelligence() {
+     if (data) setResumes(data as Resume[]);
+   }
+ 
++  async function fetchExistingApps() {
++    const { data } = await supabase
++      .from("job_applications")
++      .select("*")
++      .order("created_at", { ascending: false });
++    if (data) setExistingApps(data as JobApplication[]);
++  }
++
+   async function fetchGithubRepos() {
+     if (!githubUsername.trim()) return;
+     setFetchingRepos(true);
+@@ -300,7 +317,7 @@ export default function Intelligence() {
+       return;
+     }
+ 
+-    const cacheKey = `ai_cache_${selectedResumeId}_${company.trim()}_${role.trim()}_${jdText.length}`;
++    const cacheKey = await analysisCacheKey(selectedResumeId, jdText, company, role);
+     const cachedStr = window.sessionStorage.getItem(cacheKey);
+     if (cachedStr) {
+       try {
+@@ -321,6 +338,8 @@ export default function Intelligence() {
+     setSkillProjects([]);
+     setSelectedProjects(new Set());
+     setProjectsAdded(false);
++    setPersistStatus("idle");
++    setPersistError(null);
+ 
+     try {
+       // Stage 1: Gap Analysis
+@@ -349,6 +368,10 @@ export default function Intelligence() {
+       } catch (e) {}
+ 
+       setActiveTab("editor");
++
++      if (isSupabaseConfigured) {
++        await persistToTracker(analysisData, tailoredData);
++      }
+     } catch (err: unknown) {
+       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
+     } finally {
+@@ -356,6 +379,59 @@ export default function Intelligence() {
+     }
+   }
+ 
++  /** Connects Intelligence to the same application_id the Tracker and Quick
++   * Skills Check use, instead of letting results disappear on tab close.
++   * Matches an existing application by company+role (case-insensitive);
++   * updates it if found, creates one otherwise — same dedup convention
++   * Quick Skills Check already uses. */
++  async function persistToTracker(analysisData: Stage1Analysis, tailoredData: Stage2Content) {
++    setPersistStatus("saving");
++    try {
++      const existing = existingApps.find(
++        (a) => a.company_name.toLowerCase() === company.trim().toLowerCase() &&
++               a.role.toLowerCase() === role.trim().toLowerCase()
++      );
++
++      const payload = {
++        resume_id: selectedResumeId,
++        match_score: analysisData.match_score,
++        stage1_analysis: analysisData,
++        stage2_content: tailoredData,
++        jd_content: jdText,
++        status: "ready" as const,
++      };
++
++      if (existing) {
++        const { error: updateErr } = await supabase
++          .from("job_applications")
++          .update(payload)
++          .eq("id", existing.id);
++        if (updateErr) throw new Error(updateErr.message);
++        setLinkedApplicationId(existing.id);
++      } else {
++        const { data: { user } } = await supabase.auth.getUser();
++        const { data: inserted, error: insertErr } = await supabase
++          .from("job_applications")
++          .insert({
++            ...payload,
++            user_id: user?.id ?? "anonymous",
++            company_name: company.trim(),
++            role: role.trim(),
++            application_date: new Date().toISOString().split("T")[0],
++          })
++          .select()
++          .single();
++        if (insertErr) throw new Error(insertErr.message);
++        setLinkedApplicationId(inserted!.id);
++      }
++      await fetchExistingApps();
++      setPersistStatus("saved");
++    } catch (e) {
++      setPersistStatus("error");
++      setPersistError(e instanceof Error ? e.message : "Could not save to tracker");
++    }
++  }
++
+   function toggleProjectSelection(repoName: string) {
+     setSelectedProjects((prev) => {
+       const next = new Set(prev);
+@@ -581,6 +657,16 @@ export default function Intelligence() {
+                   <><Wand2 size={16} /> Analyze &amp; Tailor Resume</>
+                 )}
+               </button>
++
++              {persistStatus !== "idle" && (
++                <p className={`flex items-center gap-1.5 text-xs ${
++                  persistStatus === "error" ? "text-red-500" : persistStatus === "saved" ? "text-fern" : "text-ink/40"
++                }`}>
++                  {persistStatus === "saving" && <><Loader2 size={11} className="animate-spin" /> Saving to tracker…</>}
++                  {persistStatus === "saved" && <><CheckCircle2 size={11} /> Saved to Tracker as {company} — {role}</>}
++                  {persistStatus === "error" && <><AlertCircle size={11} /> Not saved to tracker: {persistError}</>}
++                </p>
++              )}
+             </section>
+ 
+             {/* ── Step 2: Gap Analysis ── */}
+diff --git a/artifacts/docmind/src/pages/resumes.tsx b/artifacts/docmind/src/pages/resumes.tsx
+index cd23a9c..e9d285c 100644
+--- a/artifacts/docmind/src/pages/resumes.tsx
++++ b/artifacts/docmind/src/pages/resumes.tsx
+@@ -47,8 +47,16 @@ function ResumeRow({
+     if (!window.confirm(`Delete "${resume.original_filename}"? This cannot be undone.`)) return;
+     setDeleting(true);
+     try {
++      const { error: deleteErr } = await supabase.from("resumes").delete().eq("id", resume.id);
++      if (deleteErr) {
++        window.alert(
++          deleteErr.message.includes("foreign key") || deleteErr.code === "23503"
++            ? "Can't delete — one or more tailored resumes are based on this one. Delete those first."
++            : `Delete failed: ${deleteErr.message}`
++        );
++        return;
++      }
+       await supabase.storage.from("resumes").remove([resume.storage_path]);
+-      await supabase.from("resumes").delete().eq("id", resume.id);
+       onDelete(resume.id);
+     } finally {
+       setDeleting(false);
+diff --git a/artifacts/docmind/src/pages/tracker.tsx b/artifacts/docmind/src/pages/tracker.tsx
+index a747330..6406a07 100644
+--- a/artifacts/docmind/src/pages/tracker.tsx
++++ b/artifacts/docmind/src/pages/tracker.tsx
+@@ -222,10 +222,23 @@ function QuickSkillsPanel({
+   const [showTrack, setShowTrack] = useState(false);
+   const [copiedKeywords, setCopiedKeywords] = useState(false);
+   const [loadingStage, setLoadingStage] = useState(0);
++  const [loadedApplicationId, setLoadedApplicationId] = useState("");
+ 
+   const readyResumes = resumes.filter((r) => r.status === "ready");
+   const canAnalyse = resumeText.trim().length > 0 && jdText.trim().length > 0;
+ 
++  function handleLoadApplication(id: string) {
++    setLoadedApplicationId(id);
++    setResult(null); setErr(null); setSaved(false); setShowTrack(false);
++    if (!id) { setResumeText(""); setJdText(""); return; }
++    const app = existingApps.find((a) => a.id === id);
++    if (!app) return;
++    const resume = resumes.find((r) => r.id === app.resume_id);
++    setResumeText(resume?.markdown_content ?? "");
++    setJdText(app.jd_content ?? "");
++    setTrackForm((f) => ({ ...f, company: app.company_name, role: app.role, resume_id: app.resume_id }));
++  }
++
+   async function analyse() {
+     if (!resumeText.trim() || !jdText.trim()) {
+       setErr("Paste both your resume text and the job description.");
+@@ -256,26 +269,40 @@ function QuickSkillsPanel({
+       setSaveErr("Company, role, and resume are required.");
+       return;
+     }
+-    const dup = existingApps.find(
+-      (a) => a.company_name.toLowerCase() === trackForm.company.toLowerCase() &&
+-             a.role.toLowerCase() === trackForm.role.toLowerCase()
+-    );
+-    if (dup && !window.confirm(`You already have an application for "${trackForm.role} @ ${trackForm.company}". Add anyway?`)) return;
+-
+     setSaving(true); setSaveErr(null);
+     try {
+-      const { data: { user } } = await supabase.auth.getUser();
+-      const { error } = await supabase.from("job_applications").insert({
+-        user_id: user?.id ?? "anonymous",
+-        resume_id: trackForm.resume_id,
+-        company_name: trackForm.company,
+-        role: trackForm.role,
+-        status: "stage1_complete",
+-        match_score: result!.match_score,
+-        stage1_analysis: result,
+-        application_date: new Date().toISOString().split("T")[0],
+-      });
+-      if (error) throw new Error(error.message);
++      if (loadedApplicationId) {
++        const { error } = await supabase.from("job_applications").update({
++          resume_id: trackForm.resume_id,
++          status: "stage1_complete",
++          match_score: result!.match_score,
++          stage1_analysis: result,
++          jd_content: jdText,
++        }).eq("id", loadedApplicationId);
++        if (error) throw new Error(error.message);
++      } else {
++        const dup = existingApps.find(
++          (a) => a.company_name.toLowerCase() === trackForm.company.toLowerCase() &&
++                 a.role.toLowerCase() === trackForm.role.toLowerCase()
++        );
++        if (dup && !window.confirm(`You already have an application for "${trackForm.role} @ ${trackForm.company}". Add anyway?`)) {
++          setSaving(false);
++          return;
++        }
++        const { data: { user } } = await supabase.auth.getUser();
++        const { error } = await supabase.from("job_applications").insert({
++          user_id: user?.id ?? "anonymous",
++          resume_id: trackForm.resume_id,
++          company_name: trackForm.company,
++          role: trackForm.role,
++          status: "stage1_complete",
++          match_score: result!.match_score,
++          stage1_analysis: result,
++          jd_content: jdText,
++          application_date: new Date().toISOString().split("T")[0],
++        });
++        if (error) throw new Error(error.message);
++      }
+       setSaved(true);
+       setShowTrack(false);
+       onAdded();
+@@ -317,6 +344,23 @@ function QuickSkillsPanel({
+             </p>
+           )}
+ 
++          {existingApps.length > 0 && (
++            <div className="flex items-center gap-2">
++              <label className="text-xs font-medium text-ink/40 shrink-0">Load from existing application</label>
++              <select value={loadedApplicationId} onChange={(e) => handleLoadApplication(e.target.value)}
++                className="flex-1 rounded-md border border-ink/15 bg-paper px-2.5 py-1.5 text-xs">
++                <option value="">— New check —</option>
++                {existingApps.map((a) => (
++                  <option key={a.id} value={a.id}>{a.company_name} — {a.role}</option>
++                ))}
++              </select>
++            </div>
++          )}
++
++          {loadedApplicationId && !jdText && (
++            <p className="text-xs text-ink/40">No saved JD text for this application yet — paste it below, and it'll be saved on update.</p>
++          )}
++
+           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+             <div className="flex flex-col gap-1.5">
+               <label className="text-xs font-medium text-ink/50">Resume (plain text)</label>
+@@ -344,16 +388,16 @@ function QuickSkillsPanel({
+               <button onClick={() => setShowTrack((v) => !v)}
+                 className="flex items-center gap-1.5 rounded-md border border-moss px-4 py-2 text-sm font-medium text-moss hover:bg-moss/5 transition-colors">
+                 <PlusCircle size={14} />
+-                Track this application
++                {loadedApplicationId ? "Update application" : "Track this application"}
+               </button>
+             )}
+             {saved && (
+               <span className="flex items-center gap-1.5 text-sm text-fern">
+-                <CheckCircle2 size={14} /> Saved to tracker!
++                <CheckCircle2 size={14} /> {loadedApplicationId ? "Application updated!" : "Saved to tracker!"}
+               </span>
+             )}
+             {result && (
+-              <button onClick={() => { setResult(null); setResumeText(""); setJdText(""); setShowTrack(false); setSaved(false); }}
++              <button onClick={() => { setResult(null); setResumeText(""); setJdText(""); setShowTrack(false); setSaved(false); setLoadedApplicationId(""); }}
+                 className="ml-auto text-sm text-ink/40 hover:text-ink">Clear</button>
+             )}
+           </div>
+@@ -361,17 +405,23 @@ function QuickSkillsPanel({
+           {/* Save-as-application mini form */}
+           {showTrack && result && (
+             <div className="rounded-lg border border-moss/30 bg-moss/5 p-4 space-y-3">
+-              <p className="text-sm font-semibold text-moss">Add to Tracker — match score pre-filled ({result.match_score}%)</p>
++              <p className="text-sm font-semibold text-moss">
++                {loadedApplicationId
++                  ? `Update application — match score pre-filled (${result.match_score}%)`
++                  : `Add to Tracker — match score pre-filled (${result.match_score}%)`}
++              </p>
+               <div className="grid grid-cols-2 gap-3">
+                 <div>
+                   <label className="mb-1 block text-xs font-medium text-ink/50">Company</label>
+-                  <input value={trackForm.company} onChange={(e) => setTrackForm({ ...trackForm, company: e.target.value })}
+-                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm" placeholder="Acme Corp" />
++                  <input value={trackForm.company} disabled={!!loadedApplicationId}
++                    onChange={(e) => setTrackForm({ ...trackForm, company: e.target.value })}
++                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm disabled:bg-ink/5 disabled:text-ink/50" placeholder="Acme Corp" />
+                 </div>
+                 <div>
+                   <label className="mb-1 block text-xs font-medium text-ink/50">Role</label>
+-                  <input value={trackForm.role} onChange={(e) => setTrackForm({ ...trackForm, role: e.target.value })}
+-                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm" placeholder="Senior Engineer" />
++                  <input value={trackForm.role} disabled={!!loadedApplicationId}
++                    onChange={(e) => setTrackForm({ ...trackForm, role: e.target.value })}
++                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm disabled:bg-ink/5 disabled:text-ink/50" placeholder="Senior Engineer" />
+                 </div>
+               </div>
+               <div>
+@@ -387,7 +437,7 @@ function QuickSkillsPanel({
+                 <button onClick={saveAsApplication} disabled={saving || readyResumes.length === 0}
+                   className="flex items-center gap-2 rounded-md bg-moss px-4 py-1.5 text-sm font-semibold text-white disabled:bg-ink/25">
+                   {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+-                  {saving ? "Saving…" : "Save"}
++                  {saving ? "Saving…" : loadedApplicationId ? "Update" : "Save"}
+                 </button>
+                 <button onClick={() => setShowTrack(false)} className="text-sm text-ink/40 hover:text-ink">Cancel</button>
+               </div>
+diff --git a/supabase/04_application_jd_and_resume_lineage.sql b/supabase/04_application_jd_and_resume_lineage.sql
+new file mode 100644
+index 0000000..7ceedf3
+--- /dev/null
++++ b/supabase/04_application_jd_and_resume_lineage.sql
+@@ -0,0 +1,24 @@
++-- DocMind Hybrid: Phase 1 v2 — shared application state
++-- Run this in your Supabase SQL Editor to apply updates.
++--
++-- Scope, per the architecture review: job_applications already has
++-- match_score, stage1_analysis, stage2_content, docx_url, pdf_url — those
++-- are NOT recreated here. The only genuinely new columns are jd_content
++-- and resumes.parent_resume_id.
++
++-- ============================================================
++-- 1. Persist pasted/extracted JD text directly on the application
++-- ============================================================
++
++ALTER TABLE job_applications
++ADD COLUMN IF NOT EXISTS jd_content text;
++
++-- ============================================================
++-- 2. Resume lineage (base → tailored), Phase 1 scope only
++-- ============================================================
++-- ON DELETE RESTRICT: deleting a base resume that has tailored children
++-- fails loudly instead of silently orphaning them. The app should catch
++-- this and tell the user to deal with the children first.
++
++ALTER TABLE resumes
++ADD COLUMN IF NOT EXISTS parent_resume_id uuid REFERENCES resumes(id) ON DELETE RESTRICT;

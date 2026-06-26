@@ -222,9 +222,22 @@ function QuickSkillsPanel({
   const [showTrack, setShowTrack] = useState(false);
   const [copiedKeywords, setCopiedKeywords] = useState(false);
   const [loadingStage, setLoadingStage] = useState(0);
+  const [loadedApplicationId, setLoadedApplicationId] = useState("");
 
   const readyResumes = resumes.filter((r) => r.status === "ready");
   const canAnalyse = resumeText.trim().length > 0 && jdText.trim().length > 0;
+
+  function handleLoadApplication(id: string) {
+    setLoadedApplicationId(id);
+    setResult(null); setErr(null); setSaved(false); setShowTrack(false);
+    if (!id) { setResumeText(""); setJdText(""); return; }
+    const app = existingApps.find((a) => a.id === id);
+    if (!app) return;
+    const resume = resumes.find((r) => r.id === app.resume_id);
+    setResumeText(resume?.markdown_content ?? "");
+    setJdText(app.jd_content ?? "");
+    setTrackForm((f) => ({ ...f, company: app.company_name, role: app.role, resume_id: app.resume_id }));
+  }
 
   async function analyse() {
     if (!resumeText.trim() || !jdText.trim()) {
@@ -256,26 +269,40 @@ function QuickSkillsPanel({
       setSaveErr("Company, role, and resume are required.");
       return;
     }
-    const dup = existingApps.find(
-      (a) => a.company_name.toLowerCase() === trackForm.company.toLowerCase() &&
-             a.role.toLowerCase() === trackForm.role.toLowerCase()
-    );
-    if (dup && !window.confirm(`You already have an application for "${trackForm.role} @ ${trackForm.company}". Add anyway?`)) return;
-
     setSaving(true); setSaveErr(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("job_applications").insert({
-        user_id: user?.id ?? "anonymous",
-        resume_id: trackForm.resume_id,
-        company_name: trackForm.company,
-        role: trackForm.role,
-        status: "stage1_complete",
-        match_score: result!.match_score,
-        stage1_analysis: result,
-        application_date: new Date().toISOString().split("T")[0],
-      });
-      if (error) throw new Error(error.message);
+      if (loadedApplicationId) {
+        const { error } = await supabase.from("job_applications").update({
+          resume_id: trackForm.resume_id,
+          status: "stage1_complete",
+          match_score: result!.match_score,
+          stage1_analysis: result,
+          jd_content: jdText,
+        }).eq("id", loadedApplicationId);
+        if (error) throw new Error(error.message);
+      } else {
+        const dup = existingApps.find(
+          (a) => a.company_name.toLowerCase() === trackForm.company.toLowerCase() &&
+                 a.role.toLowerCase() === trackForm.role.toLowerCase()
+        );
+        if (dup && !window.confirm(`You already have an application for "${trackForm.role} @ ${trackForm.company}". Add anyway?`)) {
+          setSaving(false);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from("job_applications").insert({
+          user_id: user?.id ?? "anonymous",
+          resume_id: trackForm.resume_id,
+          company_name: trackForm.company,
+          role: trackForm.role,
+          status: "stage1_complete",
+          match_score: result!.match_score,
+          stage1_analysis: result,
+          jd_content: jdText,
+          application_date: new Date().toISOString().split("T")[0],
+        });
+        if (error) throw new Error(error.message);
+      }
       setSaved(true);
       setShowTrack(false);
       onAdded();
@@ -317,6 +344,23 @@ function QuickSkillsPanel({
             </p>
           )}
 
+          {existingApps.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-ink/40 shrink-0">Load from existing application</label>
+              <select value={loadedApplicationId} onChange={(e) => handleLoadApplication(e.target.value)}
+                className="flex-1 rounded-md border border-ink/15 bg-paper px-2.5 py-1.5 text-xs">
+                <option value="">— New check —</option>
+                {existingApps.map((a) => (
+                  <option key={a.id} value={a.id}>{a.company_name} — {a.role}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {loadedApplicationId && !jdText && (
+            <p className="text-xs text-ink/40">No saved JD text for this application yet — paste it below, and it'll be saved on update.</p>
+          )}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-ink/50">Resume (plain text)</label>
@@ -344,16 +388,16 @@ function QuickSkillsPanel({
               <button onClick={() => setShowTrack((v) => !v)}
                 className="flex items-center gap-1.5 rounded-md border border-moss px-4 py-2 text-sm font-medium text-moss hover:bg-moss/5 transition-colors">
                 <PlusCircle size={14} />
-                Track this application
+                {loadedApplicationId ? "Update application" : "Track this application"}
               </button>
             )}
             {saved && (
               <span className="flex items-center gap-1.5 text-sm text-fern">
-                <CheckCircle2 size={14} /> Saved to tracker!
+                <CheckCircle2 size={14} /> {loadedApplicationId ? "Application updated!" : "Saved to tracker!"}
               </span>
             )}
             {result && (
-              <button onClick={() => { setResult(null); setResumeText(""); setJdText(""); setShowTrack(false); setSaved(false); }}
+              <button onClick={() => { setResult(null); setResumeText(""); setJdText(""); setShowTrack(false); setSaved(false); setLoadedApplicationId(""); }}
                 className="ml-auto text-sm text-ink/40 hover:text-ink">Clear</button>
             )}
           </div>
@@ -361,17 +405,23 @@ function QuickSkillsPanel({
           {/* Save-as-application mini form */}
           {showTrack && result && (
             <div className="rounded-lg border border-moss/30 bg-moss/5 p-4 space-y-3">
-              <p className="text-sm font-semibold text-moss">Add to Tracker — match score pre-filled ({result.match_score}%)</p>
+              <p className="text-sm font-semibold text-moss">
+                {loadedApplicationId
+                  ? `Update application — match score pre-filled (${result.match_score}%)`
+                  : `Add to Tracker — match score pre-filled (${result.match_score}%)`}
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink/50">Company</label>
-                  <input value={trackForm.company} onChange={(e) => setTrackForm({ ...trackForm, company: e.target.value })}
-                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm" placeholder="Acme Corp" />
+                  <input value={trackForm.company} disabled={!!loadedApplicationId}
+                    onChange={(e) => setTrackForm({ ...trackForm, company: e.target.value })}
+                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm disabled:bg-ink/5 disabled:text-ink/50" placeholder="Acme Corp" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink/50">Role</label>
-                  <input value={trackForm.role} onChange={(e) => setTrackForm({ ...trackForm, role: e.target.value })}
-                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm" placeholder="Senior Engineer" />
+                  <input value={trackForm.role} disabled={!!loadedApplicationId}
+                    onChange={(e) => setTrackForm({ ...trackForm, role: e.target.value })}
+                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm disabled:bg-ink/5 disabled:text-ink/50" placeholder="Senior Engineer" />
                 </div>
               </div>
               <div>
@@ -387,7 +437,7 @@ function QuickSkillsPanel({
                 <button onClick={saveAsApplication} disabled={saving || readyResumes.length === 0}
                   className="flex items-center gap-2 rounded-md bg-moss px-4 py-1.5 text-sm font-semibold text-white disabled:bg-ink/25">
                   {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Saving…" : loadedApplicationId ? "Update" : "Save"}
                 </button>
                 <button onClick={() => setShowTrack(false)} className="text-sm text-ink/40 hover:text-ink">Cancel</button>
               </div>

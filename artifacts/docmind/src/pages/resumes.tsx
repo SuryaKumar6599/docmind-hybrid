@@ -47,8 +47,16 @@ function ResumeRow({
     if (!window.confirm(`Delete "${resume.original_filename}"? This cannot be undone.`)) return;
     setDeleting(true);
     try {
+      const { error: deleteErr } = await supabase.from("resumes").delete().eq("id", resume.id);
+      if (deleteErr) {
+        window.alert(
+          deleteErr.message.includes("foreign key") || deleteErr.code === "23503"
+            ? "Can't delete — one or more tailored resumes are based on this one. Delete those first."
+            : `Delete failed: ${deleteErr.message}`
+        );
+        return;
+      }
       await supabase.storage.from("resumes").remove([resume.storage_path]);
-      await supabase.from("resumes").delete().eq("id", resume.id);
       onDelete(resume.id);
     } finally {
       setDeleting(false);

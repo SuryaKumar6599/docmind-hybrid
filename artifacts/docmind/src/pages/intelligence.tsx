@@ -24,11 +24,13 @@ import {
   supabase,
   isSupabaseConfigured,
   type Resume,
+  type JobApplication,
   type Stage1Analysis,
   type Stage2Content,
   type RewrittenBullet,
 } from "../lib/supabase";
 import { useApiUrl } from "../lib/useApiUrl";
+import { analysisCacheKey } from "../lib/promptVersion";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -181,6 +183,10 @@ function useSessionState<T>(key: string, initialValue: T): [T, React.Dispatch<Re
 
 export default function Intelligence() {
   const [resumes, setResumes] = useState<Resume[]>([]);
+  const [existingApps, setExistingApps] = useState<JobApplication[]>([]);
+  const [linkedApplicationId, setLinkedApplicationId] = useSessionState<string>("docmind_linkedAppId", "");
+  const [persistStatus, setPersistStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [persistError, setPersistError] = useState<string | null>(null);
   const [selectedResumeId, setSelectedResumeId] = useSessionState<string>("docmind_resumeId", "");
   const [jdText, setJdText] = useSessionState("docmind_jdText", "");
   const [company, setCompany] = useSessionState("docmind_company", "");
@@ -218,7 +224,10 @@ export default function Intelligence() {
     : [];
 
   useEffect(() => {
-    if (isSupabaseConfigured) fetchResumes();
+    if (isSupabaseConfigured) {
+      fetchResumes();
+      fetchExistingApps();
+    }
   }, []);
 
   // Warn before closing if there is active work
@@ -262,6 +271,14 @@ export default function Intelligence() {
     if (data) setResumes(data as Resume[]);
   }
 
+  async function fetchExistingApps() {
+    const { data } = await supabase
+      .from("job_applications")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) setExistingApps(data as JobApplication[]);
+  }
+
   async function fetchGithubRepos() {
     if (!githubUsername.trim()) return;
     setFetchingRepos(true);
@@ -300,7 +317,7 @@ export default function Intelligence() {
       return;
     }
 
-    const cacheKey = `ai_cache_${selectedResumeId}_${company.trim()}_${role.trim()}_${jdText.length}`;
+    const cacheKey = await analysisCacheKey(selectedResumeId, jdText, company, role);
     const cachedStr = window.sessionStorage.getItem(cacheKey);
     if (cachedStr) {
       try {
@@ -321,6 +338,8 @@ export default function Intelligence() {
     setSkillProjects([]);
     setSelectedProjects(new Set());
     setProjectsAdded(false);
+    setPersistStatus("idle");
+    setPersistError(null);
 
     try {
       // Stage 1: Gap Analysis
@@ -349,10 +368,67 @@ export default function Intelligence() {
       } catch (e) {}
 
       setActiveTab("editor");
+
+      if (isSupabaseConfigured) {
+        await persistToTracker(analysisData, tailoredData);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setAnalyzing(false);
+    }
+  }
+
+  /** Connects Intelligence to the same application_id the Tracker and Quick
+   * Skills Check use, instead of letting results disappear on tab close.
+   * Matches an existing application by company+role (case-insensitive);
+   * updates it if found, creates one otherwise — same dedup convention
+   * Quick Skills Check already uses. */
+  async function persistToTracker(analysisData: Stage1Analysis, tailoredData: Stage2Content) {
+    setPersistStatus("saving");
+    try {
+      const existing = existingApps.find(
+        (a) => a.company_name.toLowerCase() === company.trim().toLowerCase() &&
+               a.role.toLowerCase() === role.trim().toLowerCase()
+      );
+
+      const payload = {
+        resume_id: selectedResumeId,
+        match_score: analysisData.match_score,
+        stage1_analysis: analysisData,
+        stage2_content: tailoredData,
+        jd_content: jdText,
+        status: "ready" as const,
+      };
+
+      if (existing) {
+        const { error: updateErr } = await supabase
+          .from("job_applications")
+          .update(payload)
+          .eq("id", existing.id);
+        if (updateErr) throw new Error(updateErr.message);
+        setLinkedApplicationId(existing.id);
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: inserted, error: insertErr } = await supabase
+          .from("job_applications")
+          .insert({
+            ...payload,
+            user_id: user?.id ?? "anonymous",
+            company_name: company.trim(),
+            role: role.trim(),
+            application_date: new Date().toISOString().split("T")[0],
+          })
+          .select()
+          .single();
+        if (insertErr) throw new Error(insertErr.message);
+        setLinkedApplicationId(inserted!.id);
+      }
+      await fetchExistingApps();
+      setPersistStatus("saved");
+    } catch (e) {
+      setPersistStatus("error");
+      setPersistError(e instanceof Error ? e.message : "Could not save to tracker");
     }
   }
 
@@ -581,6 +657,16 @@ export default function Intelligence() {
                   <><Wand2 size={16} /> Analyze &amp; Tailor Resume</>
                 )}
               </button>
+
+              {persistStatus !== "idle" && (
+                <p className={`flex items-center gap-1.5 text-xs ${
+                  persistStatus === "error" ? "text-red-500" : persistStatus === "saved" ? "text-fern" : "text-ink/40"
+                }`}>
+                  {persistStatus === "saving" && <><Loader2 size={11} className="animate-spin" /> Saving to tracker…</>}
+                  {persistStatus === "saved" && <><CheckCircle2 size={11} /> Saved to Tracker as {company} — {role}</>}
+                  {persistStatus === "error" && <><AlertCircle size={11} /> Not saved to tracker: {persistError}</>}
+                </p>
+              )}
             </section>
 
             {/* ── Step 2: Gap Analysis ── */}

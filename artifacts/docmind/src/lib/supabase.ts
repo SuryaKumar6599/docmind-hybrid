@@ -90,6 +90,7 @@ export interface JobApplication {
   role: string;
   jd_url: string | null;
   jd_storage_path: string | null;
+  jd_content: string | null;
   status: ApplicationStatus;
   application_date: string | null;
   match_score: number | null;
