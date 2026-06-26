@@ -705,7 +705,7 @@ function ApplicationRow({
   const [notes, setNotes] = useState(app.notes ?? "");
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<"analysis" | "tailored" | "notes">("analysis");
+  const [activeTab, setActiveTab] = useState<"analysis" | "tailored" | "jd" | "notes">("analysis");
   const cfg = STATUS_CONFIG[app.status];
   const isProcessing = PIPELINE_STATUSES.includes(app.status) && app.status !== "ready";
 
@@ -752,10 +752,14 @@ function ApplicationRow({
                 <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
               ))}
             </select>
+            <a href={`/intelligence?application_id=${app.id}`}
+              className="ml-auto flex items-center gap-1 rounded-md border border-moss/30 px-2.5 py-1 text-xs font-medium text-moss hover:bg-moss/5">
+              <Sparkles size={12} /> Tailor in Intelligence
+            </a>
             {app.jd_url && (
               <a href={app.jd_url} target="_blank" rel="noreferrer"
-                className="ml-auto flex items-center gap-1 text-xs text-signal hover:underline">
-                <ExternalLink size={12} /> View JD
+                className="flex items-center gap-1 text-xs text-signal hover:underline">
+                <ExternalLink size={12} /> Source JD
               </a>
             )}
           </div>
@@ -766,6 +770,7 @@ function ApplicationRow({
               {[
                 { id: "analysis" as const, label: "AI Analysis", show: Boolean(app.stage1_analysis) },
                 { id: "tailored" as const, label: "Tailored Content", show: Boolean(app.stage2_content) },
+                { id: "jd" as const, label: "Job Description", show: Boolean(app.jd_content || app.jd_url) },
                 { id: "notes" as const, label: "Notes", show: true },
               ].filter((t) => t.show).map((t) => (
                 <button key={t.id} onClick={() => setActiveTab(t.id)}
@@ -839,6 +844,25 @@ function ApplicationRow({
             <p className="rounded-md bg-ink/5 px-4 py-6 text-center text-sm text-ink/40">
               Stage 2 tailoring hasn't run yet — upload a JD file to trigger the full pipeline.
             </p>
+          )}
+
+          {/* JD tab */}
+          {activeTab === "jd" && (
+            <div className="rounded-md border border-ink/10 bg-paper p-3 text-sm">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Saved Job Description</p>
+                {app.jd_content && <CopyButton text={app.jd_content} label="Copy JD" />}
+              </div>
+              {app.jd_content ? (
+                <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md bg-white p-3 font-mono text-xs leading-relaxed text-ink/70">
+                  {app.jd_content}
+                </pre>
+              ) : app.jd_url ? (
+                <p className="text-sm text-ink/50">Only a source URL is saved for this application.</p>
+              ) : (
+                <p className="text-sm text-ink/40">No JD content saved yet. Convert a JD and attach it from the Convert tab.</p>
+              )}
+            </div>
           )}
 
           {/* Notes tab */}

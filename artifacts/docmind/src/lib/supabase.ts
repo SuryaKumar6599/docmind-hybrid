@@ -48,6 +48,7 @@ export interface Resume {
   document_id: string | null;
   chunk_count: number | null;
   markdown_content: string | null;
+  parent_resume_id: string | null;
   error_message: string | null;
   is_default: boolean;
   created_at: string;

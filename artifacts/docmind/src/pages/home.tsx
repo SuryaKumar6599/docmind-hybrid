@@ -33,6 +33,7 @@ type IndexedDoc = {
   chunks: number;
   tokens: number;
   time: string;
+  category: string;
   status: "pending_processing" | "processing" | "ready" | "error";
   id: string;
 };
@@ -42,6 +43,18 @@ import { BackendStatusBadge } from "../components/BackendStatusDot";
 import { BackendDebugPanel } from "../components/BackendDebugPanel";
 
 // removed static API_URL
+
+const SEARCH_CATEGORIES = [
+  { value: "general", label: "General" },
+  { value: "resume", label: "Resumes" },
+  { value: "job_description", label: "Job Descriptions" },
+  { value: "interview", label: "Interview Notes" },
+  { value: "portfolio", label: "Portfolio" },
+] as const;
+
+function categoryLabel(value: string) {
+  return SEARCH_CATEGORIES.find((cat) => cat.value === value)?.label ?? value;
+}
 
 export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -57,6 +70,8 @@ export default function Home() {
   });
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
+  const [uploadCategory, setUploadCategory] = useState("general");
+  const [searchCategory, setSearchCategory] = useState("general");
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -121,7 +136,7 @@ export default function Home() {
       const { error: dbError } = await supabase.from("documents").insert({
         id: docId,
         name: file.name,
-        category: "general",
+        category: uploadCategory,
         storage_path: storagePath,
         status: "pending_processing",
       });
@@ -135,11 +150,12 @@ export default function Home() {
           chunks: 0, 
           tokens: 0, 
           time: new Date().toLocaleTimeString(),
+          category: uploadCategory,
           status: "pending_processing"
         },
         ...prev,
       ]);
-      setStatus({ text: `Queued "${file.name}" for indexing`, type: "ok" });
+      setStatus({ text: `Queued "${file.name}" in ${categoryLabel(uploadCategory)}`, type: "ok" });
       setFile(null);
       if (fileInput.current) fileInput.current.value = "";
     } catch (error) {
@@ -161,7 +177,7 @@ export default function Home() {
       const response = await fetch(`${API_URL}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed, match_count: 5, category: "general" }),
+        body: JSON.stringify({ question: trimmed, match_count: 5, category: searchCategory || null }),
       });
       if (!response.ok) throw new Error(await response.text());
       if (!response.body) throw new Error("No response body");
@@ -295,6 +311,12 @@ export default function Home() {
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="hidden" />
 
+            <label className="mt-3 block text-xs font-medium text-ink/50">Document bucket</label>
+            <select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)}
+              className="mt-1 w-full rounded-md border border-ink/15 bg-paper px-2.5 py-2 text-sm text-ink">
+              {SEARCH_CATEGORIES.map((cat) => <option key={cat.value} value={cat.value}>{cat.label}</option>)}
+            </select>
+
             <button type="button" onClick={uploadDocument}
               disabled={!file || isUploading}
               className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-md bg-signal px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-ink/25">
@@ -334,6 +356,7 @@ export default function Home() {
                       {doc.status === "error" && <span className="text-[10px] font-medium text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Error</span>}
                     </div>
                     <div className="mt-1 flex gap-3 text-xs text-ink/40">
+                      <span>{categoryLabel(doc.category)}</span>
                       <span className="ml-auto">{doc.time}</span>
                     </div>
                   </li>
@@ -353,6 +376,13 @@ export default function Home() {
           <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4 bg-white/40">
             <div className="flex items-center gap-2 text-sm font-semibold text-moss">
               <Search size={18} /> Search
+            </div>
+            <div className="ml-auto mr-3 flex items-center gap-2 text-xs text-ink/50">
+              <span>Scope</span>
+              <select value={searchCategory} onChange={(e) => setSearchCategory(e.target.value)}
+                className="rounded-md border border-ink/15 bg-paper px-2 py-1 text-xs text-ink">
+                {SEARCH_CATEGORIES.map((cat) => <option key={cat.value} value={cat.value}>{cat.label}</option>)}
+              </select>
             </div>
             {messages.length > 0 && (
               <button onClick={() => setMessages([])}
@@ -394,7 +424,7 @@ export default function Home() {
               <input
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask across indexed documents…"
+                placeholder={`Ask within ${categoryLabel(searchCategory).toLowerCase()}…`}
                 className="min-h-11 flex-1 rounded-md border border-ink/15 bg-paper px-3 text-base outline-none ring-signal/30 focus:ring-4"
               />
               <button type="submit" disabled={!question.trim() || isAsking || backendStatus !== "connected"}
@@ -403,7 +433,7 @@ export default function Home() {
                 Ask
               </button>
             </div>
-            <p className="mt-1.5 text-right text-xs text-ink/25">Press Enter to send</p>
+            <p className="mt-1.5 text-right text-xs text-ink/25">Press Enter to send · scoped to {categoryLabel(searchCategory)}</p>
           </form>
         </motion.section>
       </div>

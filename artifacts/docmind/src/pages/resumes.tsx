@@ -6,6 +6,7 @@ import {
   Clock,
   Copy,
   CopyCheck,
+  Download,
   FileText,
   Hash,
   Loader2,
@@ -15,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase, isSupabaseConfigured, type Resume, type ResumeStatus } from "../lib/supabase";
+import { markdownToXml } from "../lib/markdownToXml";
 
 const STATUS_CONFIG: Record<ResumeStatus, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
   pending_processing: { label: "Queued",     color: "text-amber",   bg: "bg-amber/10",  icon: Clock },
@@ -27,10 +29,12 @@ function ResumeRow({
   resume,
   onDelete,
   onSetDefault,
+  childCount,
 }: {
   resume: Resume;
   onDelete: (id: string) => void;
   onSetDefault: (resume: Resume) => void;
+  childCount: number;
 }) {
   const cfg = STATUS_CONFIG[resume.status];
   const Icon = cfg.icon;
@@ -81,8 +85,21 @@ function ResumeRow({
     });
   }
 
+  function downloadText(kind: "markdown" | "xml") {
+    if (!resume.markdown_content) return;
+    const isMarkdown = kind === "markdown";
+    const text = isMarkdown ? resume.markdown_content : markdownToXml(resume.markdown_content, resume.original_filename);
+    const blob = new Blob([text], { type: isMarkdown ? "text/markdown" : "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${resume.original_filename.replace(/\.[^.]+$/, "")}${isMarkdown ? ".md" : ".xml"}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
-    <li className="rounded-lg border border-ink/10 bg-white/80 shadow-sm">
+    <li className={`rounded-lg border border-ink/10 bg-white/80 shadow-sm ${resume.parent_resume_id ? "ml-6 border-moss/20" : ""}`}>
       <div className="flex items-center gap-3 px-4 py-3">
         <FileText className="shrink-0 text-ink/40" size={20} />
         <div className="min-w-0 flex-1">
@@ -90,6 +107,12 @@ function ResumeRow({
             {resume.original_filename}
             {resume.is_default && (
               <span className="ml-2 rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-semibold text-amber align-middle">Default</span>
+            )}
+            {resume.parent_resume_id && (
+              <span className="ml-2 rounded-full bg-moss/10 px-2 py-0.5 text-[10px] font-semibold text-moss align-middle">Tailored</span>
+            )}
+            {childCount > 0 && (
+              <span className="ml-2 rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink/50 align-middle">{childCount} version{childCount === 1 ? "" : "s"}</span>
             )}
           </p>
           <p className="text-xs text-ink/50">
@@ -141,11 +164,21 @@ function ResumeRow({
               <span className="flex items-center gap-1"><Hash size={10} /> {resume.markdown_content.length.toLocaleString()} chars</span>
               <span>~{Math.round(resume.markdown_content.length / 4).toLocaleString()} tokens</span>
             </div>
-            <button onClick={copyMarkdown}
-              className="flex items-center gap-1.5 rounded-md border border-ink/10 px-2.5 py-1 text-xs text-ink/50 hover:bg-ink/5 hover:text-ink transition-colors">
-              {copied ? <CopyCheck size={11} className="text-fern" /> : <Copy size={11} />}
-              {copied ? "Copied!" : "Copy Markdown"}
-            </button>
+            <div className="flex gap-2">
+              <button onClick={copyMarkdown}
+                className="flex items-center gap-1.5 rounded-md border border-ink/10 px-2.5 py-1 text-xs text-ink/50 hover:bg-ink/5 hover:text-ink transition-colors">
+                {copied ? <CopyCheck size={11} className="text-fern" /> : <Copy size={11} />}
+                {copied ? "Copied!" : "Copy Markdown"}
+              </button>
+              <button onClick={() => downloadText("markdown")}
+                className="flex items-center gap-1.5 rounded-md border border-ink/10 px-2.5 py-1 text-xs text-ink/50 hover:bg-ink/5 hover:text-ink transition-colors">
+                <Download size={11} /> .md
+              </button>
+              <button onClick={() => downloadText("xml")}
+                className="flex items-center gap-1.5 rounded-md border border-moss/20 px-2.5 py-1 text-xs text-moss hover:bg-moss/5 transition-colors">
+                <Download size={11} /> .xml
+              </button>
+            </div>
           </div>
           <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-ink/70">
             {resume.markdown_content}
@@ -247,6 +280,16 @@ export default function Resumes() {
 
   const readyCount = resumes.filter((r) => r.status === "ready").length;
   const processingCount = resumes.filter((r) => ["pending_processing", "processing"].includes(r.status)).length;
+  const childCounts = resumes.reduce<Record<string, number>>((acc, resume) => {
+    if (resume.parent_resume_id) acc[resume.parent_resume_id] = (acc[resume.parent_resume_id] ?? 0) + 1;
+    return acc;
+  }, {});
+  const orderedResumes = [...resumes].sort((a, b) => {
+    if (a.parent_resume_id === b.id) return 1;
+    if (b.parent_resume_id === a.id) return -1;
+    if (!!a.parent_resume_id !== !!b.parent_resume_id) return a.parent_resume_id ? 1 : -1;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -326,8 +369,8 @@ export default function Resumes() {
         </div>
       ) : (
         <ul className="space-y-3">
-          {resumes.map((resume) => (
-            <ResumeRow key={resume.id} resume={resume} onDelete={handleDelete} onSetDefault={handleSetDefault} />
+          {orderedResumes.map((resume) => (
+            <ResumeRow key={resume.id} resume={resume} onDelete={handleDelete} onSetDefault={handleSetDefault} childCount={childCounts[resume.id] ?? 0} />
           ))}
         </ul>
       )}

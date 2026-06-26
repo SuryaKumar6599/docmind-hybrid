@@ -14,6 +14,7 @@ import {
   Github,
   Loader2,
   RefreshCw,
+  Save,
   Sparkles,
   Target,
   Wand2,
@@ -60,6 +61,18 @@ function triggerDownload(blob: Blob, filename: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function safeFilenamePart(value: string) {
+  return value.trim().replace(/[^a-zA-Z0-9._-]/g, "_") || "tailored";
+}
+
+function tailoredContentToMarkdown(summary: string, bullets: RewrittenBullet[], content: Stage2Content) {
+  const lines = ["# Tailored Resume", "", "## Professional Summary", summary.trim(), "", "## Enhanced Bullets"];
+  for (const bullet of bullets) lines.push(`- ${bullet.rewritten}`);
+  if (content.skills_to_add?.length) lines.push("", "## Skills to Add", ...content.skills_to_add.map((skill) => `- ${skill}`));
+  if (content.cover_letter_opening) lines.push("", "## Cover Letter Opening", content.cover_letter_opening);
+  return lines.join("\n").trim() + "\n";
 }
 
 // ── GitHub types ──────────────────────────────────────────────────────────────
@@ -194,6 +207,8 @@ export default function Intelligence() {
 
   const [analyzing, setAnalyzing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [savingTailoredResume, setSavingTailoredResume] = useState(false);
+  const [tailoredResumeSaved, setTailoredResumeSaved] = useState(false);
   const API_URL = useApiUrl();
 
   const isConfigured = Boolean(API_URL) && isSupabaseConfigured;
@@ -278,6 +293,31 @@ export default function Intelligence() {
       .order("created_at", { ascending: false });
     if (data) setExistingApps(data as JobApplication[]);
   }
+
+  function loadApplication(id: string) {
+    setLinkedApplicationId(id);
+    if (!id) return;
+    const app = existingApps.find((item) => item.id === id);
+    if (!app) return;
+    setCompany(app.company_name ?? "");
+    setRole(app.role ?? "");
+    setSelectedResumeId(app.resume_id ?? "");
+    setJdText(app.jd_content ?? "");
+    setAnalysis(app.stage1_analysis ?? null);
+    setTailoredContent(app.stage2_content ?? null);
+    setEditedSummary(app.stage2_content?.tailored_summary ?? "");
+    setEditedBullets(app.stage2_content?.rewritten_bullets ?? []);
+    setPersistStatus("idle");
+    setPersistError(null);
+    setActiveTab(app.stage2_content ? "editor" : "preview");
+  }
+
+  useEffect(() => {
+    const appId = new URLSearchParams(window.location.search).get("application_id");
+    if (appId && existingApps.length && linkedApplicationId !== appId) {
+      loadApplication(appId);
+    }
+  }, [existingApps]);
 
   async function fetchGithubRepos() {
     if (!githubUsername.trim()) return;
@@ -387,10 +427,12 @@ export default function Intelligence() {
   async function persistToTracker(analysisData: Stage1Analysis, tailoredData: Stage2Content) {
     setPersistStatus("saving");
     try {
-      const existing = existingApps.find(
-        (a) => a.company_name.toLowerCase() === company.trim().toLowerCase() &&
-               a.role.toLowerCase() === role.trim().toLowerCase()
-      );
+      const existing = linkedApplicationId
+        ? existingApps.find((a) => a.id === linkedApplicationId)
+        : existingApps.find(
+            (a) => a.company_name.toLowerCase() === company.trim().toLowerCase() &&
+                   a.role.toLowerCase() === role.trim().toLowerCase()
+          );
 
       const payload = {
         resume_id: selectedResumeId,
@@ -521,6 +563,40 @@ export default function Intelligence() {
     }
   }
 
+  async function saveTailoredAsResume() {
+    if (!tailoredContent || !selectedResumeId || !isSupabaseConfigured) return;
+    setSavingTailoredResume(true);
+    setTailoredResumeSaved(false);
+    setError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id ?? "anonymous";
+      const markdown = tailoredContentToMarkdown(editedSummary, editedBullets, tailoredContent);
+      const filename = `${safeFilenamePart(company)}_${safeFilenamePart(role)}_tailored.md`;
+      const storagePath = `${userId}/${Date.now()}_${filename}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("resumes")
+        .upload(storagePath, new Blob([markdown], { type: "text/markdown" }), { upsert: false });
+      if (uploadErr) throw new Error(uploadErr.message);
+      const { error: insertErr } = await supabase.from("resumes").insert({
+        user_id: userId,
+        original_filename: filename,
+        storage_path: storagePath,
+        status: "ready",
+        markdown_content: markdown,
+        parent_resume_id: selectedResumeId,
+        chunk_count: Math.max(1, markdown.split(/\n\s*\n+/).filter(Boolean).length),
+      });
+      if (insertErr) throw new Error(insertErr.message);
+      setTailoredResumeSaved(true);
+      await fetchResumes();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save tailored resume.");
+    } finally {
+      setSavingTailoredResume(false);
+    }
+  }
+
   const canAnalyze = !analyzing && !!selectedResumeId && !!jdText && !!company && !!role;
 
   const scoreColor =
@@ -577,6 +653,27 @@ export default function Intelligence() {
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-moss text-xs font-bold text-white">1</span>
                 <h2 className="font-semibold text-ink">Setup</h2>
               </div>
+
+              {/* Application selector */}
+              {existingApps.length > 0 && (
+                <div className="mb-4">
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink/60">
+                    Existing Application
+                  </label>
+                  <select
+                    value={linkedApplicationId}
+                    onChange={(e) => loadApplication(e.target.value)}
+                    className="w-full rounded-lg border border-ink/10 bg-ink/5 px-3 py-2.5 text-sm text-ink focus:border-moss/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-moss/20"
+                  >
+                    <option value="">— New tailoring run —</option>
+                    {existingApps.map((app) => (
+                      <option key={app.id} value={app.id}>
+                        {app.company_name} — {app.role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Resume selector */}
               <div className="mb-4">
@@ -885,14 +982,25 @@ export default function Intelligence() {
                   )}
                 </button>
                 {tailoredContent && (
-                  <button
-                    onClick={downloadDocx}
-                    disabled={downloading}
-                    className="ml-auto flex items-center gap-1.5 rounded-lg bg-moss px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-moss/90 disabled:opacity-50"
-                  >
-                    {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-                    Export DOCX
-                  </button>
+                  <div className="ml-auto flex items-center gap-2">
+                    {tailoredResumeSaved && <span className="text-xs font-medium text-fern">Saved</span>}
+                    <button
+                      onClick={saveTailoredAsResume}
+                      disabled={savingTailoredResume}
+                      className="flex items-center gap-1.5 rounded-lg border border-moss/30 px-3 py-1.5 text-xs font-semibold text-moss hover:bg-moss/5 disabled:opacity-50"
+                    >
+                      {savingTailoredResume ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                      Save Resume
+                    </button>
+                    <button
+                      onClick={downloadDocx}
+                      disabled={downloading}
+                      className="flex items-center gap-1.5 rounded-lg bg-moss px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-moss/90 disabled:opacity-50"
+                    >
+                      {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                      Export DOCX
+                    </button>
+                  </div>
                 )}
               </div>
 

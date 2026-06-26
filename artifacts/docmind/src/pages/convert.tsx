@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -9,8 +9,11 @@ import {
   FileCode2,
   FileUp,
   Hash,
+  Link2,
   Loader2,
   RotateCcw,
+  Save,
+  Search,
   Server,
   Type,
   Zap,
@@ -18,6 +21,8 @@ import {
 
 import { useBackendStatus } from "../lib/useBackendStatus";
 import { BackendStatusDot } from "../components/BackendStatusDot";
+import { markdownToXml } from "../lib/markdownToXml";
+import { isSupabaseConfigured, supabase, type JobApplication } from "../lib/supabase";
 
 // removed static API_URL
 
@@ -67,6 +72,10 @@ export default function Convert() {
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [viewFormat, setViewFormat] = useState<"markdown" | "xml">("markdown");
+  const [applications, setApplications] = useState<JobApplication[]>([]);
+  const [selectedApplicationId, setSelectedApplicationId] = useState("");
+  const [indexCategory, setIndexCategory] = useState("general");
+  const [actionStatus, setActionStatus] = useState<{ type: "idle" | "working" | "ok" | "error"; text: string }>({ type: "idle", text: "" });
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -80,6 +89,45 @@ export default function Convert() {
     if (f) { setFile(f); setResult(null); setError(null); }
   }
 
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    fetchApplications();
+  }, []);
+
+  async function fetchApplications() {
+    const { data } = await supabase
+      .from("job_applications")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setApplications((data as JobApplication[]) ?? []);
+  }
+
+  function safeBaseName(filename: string) {
+    return (filename.replace(/\.[^.]+$/, "") || "document").replace(/[^a-zA-Z0-9._-]/g, "_");
+  }
+
+  function estimateChunkCount(markdown: string) {
+    return Math.max(1, markdown.split(/\n\s*\n+/).filter((part) => part.trim().length > 0).length);
+  }
+
+  function normalizeConvertResult(data: any, fallbackFilename: string): ConvertResult {
+    const filename = String(data?.filename || fallbackFilename || "document");
+    const markdown = String(data?.markdown || "");
+    const xml = typeof data?.xml === "string" && data.xml.trim()
+      ? data.xml
+      : markdownToXml(markdown, filename);
+    return {
+      filename,
+      markdown,
+      xml,
+      char_count: Number(data?.char_count ?? markdown.length),
+      word_count: Number(data?.word_count ?? markdown.trim().split(/\s+/).filter(Boolean).length),
+      estimated_tokens: Number(data?.estimated_tokens ?? Math.ceil(markdown.length / 4)),
+      ocr_used: Boolean(data?.ocr_used ?? false),
+    };
+  }
+
+
   async function convert() {
     if (!file || !API_URL) return;
     setLoading(true); setOcrMode(false); setError(null); setResult(null); setViewFormat("markdown");
@@ -88,9 +136,10 @@ export default function Convert() {
       form.append("file", file);
       const res = await fetch(`${API_URL}/convert`, { method: "POST", body: form });
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
-      const data = await res.json();
-      setOcrMode(data.ocr_used ?? false);
+      const data = normalizeConvertResult(await res.json(), file.name);
+      setOcrMode(data.ocr_used);
       setResult(data);
+      setActionStatus({ type: data.xml ? "ok" : "error", text: data.xml ? "Markdown and XML are ready." : "Markdown converted, but XML could not be generated." });
       setHistory((prev) => [{ id: `${Date.now()}-${data.filename}`, convertedAt: new Date(), result: data }, ...prev].slice(0, 10));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Conversion failed");
@@ -120,8 +169,74 @@ export default function Convert() {
     URL.revokeObjectURL(url);
   }
 
+  async function saveAsResume() {
+    if (!result || !isSupabaseConfigured) return;
+    setActionStatus({ type: "working", text: "Saving converted Markdown as a ready resume…" });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id ?? "anonymous";
+      const filename = `${safeBaseName(result.filename)}.md`;
+      const storagePath = `${userId}/${Date.now()}_${filename}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("resumes")
+        .upload(storagePath, new Blob([result.markdown], { type: "text/markdown" }), { upsert: false });
+      if (uploadErr) throw new Error(uploadErr.message);
+      const { error: insertErr } = await supabase.from("resumes").insert({
+        user_id: userId,
+        original_filename: filename,
+        storage_path: storagePath,
+        status: "ready",
+        markdown_content: result.markdown,
+        chunk_count: estimateChunkCount(result.markdown),
+      });
+      if (insertErr) throw new Error(insertErr.message);
+      setActionStatus({ type: "ok", text: "Saved as a ready resume." });
+    } catch (err) {
+      setActionStatus({ type: "error", text: err instanceof Error ? err.message : "Could not save resume." });
+    }
+  }
+
+  async function attachAsJobDescription() {
+    if (!result || !selectedApplicationId || !isSupabaseConfigured) return;
+    setActionStatus({ type: "working", text: "Attaching converted text to application…" });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id ?? "anonymous";
+      const filename = `${safeBaseName(result.filename)}.md`;
+      const storagePath = `${userId}/${Date.now()}_${filename}`;
+      await supabase.storage
+        .from("job-descriptions")
+        .upload(storagePath, new Blob([result.markdown], { type: "text/markdown" }), { upsert: false });
+      const { error: updateErr } = await supabase
+        .from("job_applications")
+        .update({ jd_content: result.markdown, jd_storage_path: storagePath })
+        .eq("id", selectedApplicationId);
+      if (updateErr) throw new Error(updateErr.message);
+      setActionStatus({ type: "ok", text: "Attached as this application JD." });
+      await fetchApplications();
+    } catch (err) {
+      setActionStatus({ type: "error", text: err instanceof Error ? err.message : "Could not attach JD." });
+    }
+  }
+
+  async function indexConvertedDocument() {
+    if (!result || !API_URL) return;
+    setActionStatus({ type: "working", text: "Indexing converted Markdown into Search…" });
+    try {
+      const form = new FormData();
+      form.append("file", new File([result.markdown], `${safeBaseName(result.filename)}.md`, { type: "text/markdown" }));
+      form.append("category", indexCategory);
+      const res = await fetch(`${API_URL}/index`, { method: "POST", body: form });
+      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+      const indexed = await res.json();
+      setActionStatus({ type: "ok", text: `Indexed ${indexed.chunk_count ?? indexed.chunks ?? 0} chunks for Search.` });
+    } catch (err) {
+      setActionStatus({ type: "error", text: err instanceof Error ? err.message : "Could not index document." });
+    }
+  }
+
   function reset() {
-    setFile(null); setResult(null); setError(null); setOcrMode(false);
+    setFile(null); setResult(null); setError(null); setOcrMode(false); setActionStatus({ type: "idle", text: "" });
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -351,6 +466,55 @@ export default function Convert() {
                     <Download size={12} /> .xml
                   </button>
                 </div>
+              </div>
+
+              {/* Save / attach actions */}
+              <div className="border-b border-ink/10 bg-white px-4 py-3">
+                <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={saveAsResume} disabled={!isSupabaseConfigured || actionStatus.type === "working"}
+                      className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-40">
+                      <Save size={12} /> Save as Resume
+                    </button>
+                    <button onClick={indexConvertedDocument} disabled={!API_URL || actionStatus.type === "working"}
+                      className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-40">
+                      <Search size={12} /> Index to Search
+                    </button>
+                    <select value={indexCategory} onChange={(e) => setIndexCategory(e.target.value)}
+                      className="rounded-md border border-ink/15 bg-paper px-2 py-1.5 text-xs text-ink">
+                      <option value="general">General</option>
+                      <option value="resume">Resume</option>
+                      <option value="job_description">Job Description</option>
+                      <option value="interview">Interview Notes</option>
+                      <option value="portfolio">Portfolio</option>
+                    </select>
+                  </div>
+
+                  <div className="flex min-w-0 flex-wrap gap-2 lg:justify-end">
+                    <select value={selectedApplicationId} onChange={(e) => setSelectedApplicationId(e.target.value)}
+                      disabled={!isSupabaseConfigured || applications.length === 0}
+                      className="min-w-[220px] flex-1 rounded-md border border-ink/15 bg-paper px-2 py-1.5 text-xs text-ink disabled:opacity-40">
+                      <option value="">Choose application…</option>
+                      {applications.map((app) => (
+                        <option key={app.id} value={app.id}>{app.company_name} — {app.role}</option>
+                      ))}
+                    </select>
+                    <button onClick={attachAsJobDescription} disabled={!selectedApplicationId || !isSupabaseConfigured || actionStatus.type === "working"}
+                      className="flex items-center gap-1.5 rounded-md bg-moss px-3 py-1.5 text-xs font-medium text-white hover:bg-moss/90 disabled:opacity-40">
+                      <Link2 size={12} /> Attach JD
+                    </button>
+                  </div>
+                </div>
+                {actionStatus.type !== "idle" && (
+                  <p className={`mt-2 flex items-center gap-1.5 text-xs ${
+                    actionStatus.type === "error" ? "text-red-500" : actionStatus.type === "ok" ? "text-fern" : "text-ink/50"
+                  }`}>
+                    {actionStatus.type === "working" && <Loader2 size={11} className="animate-spin" />}
+                    {actionStatus.type === "ok" && <CheckCircle2 size={11} />}
+                    {actionStatus.type === "error" && <AlertCircle size={11} />}
+                    {actionStatus.text}
+                  </p>
+                )}
               </div>
 
               {/* Preview */}

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import instructor
 import requests
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel
@@ -216,6 +216,7 @@ async def root() -> dict[str, object]:
 @router.post("/index")
 async def index_document(
     file: UploadFile = File(...),
+    category: str = Form("general"),
     store: SupabaseVectorStore = Depends(get_store),
     chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
     embedding_provider: BaseEmbeddingProvider = Depends(get_embedding_provider_dep),
@@ -224,7 +225,7 @@ async def index_document(
     filename = file.filename or "document"
     _validate_extension(filename)
     suffix = Path(filename).suffix.lower()
-    logger.info("Index request: %s", filename)
+    logger.info("Index request: %s (category=%s)", filename, category)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(await file.read())
@@ -241,14 +242,15 @@ async def index_document(
         # Create document record first, then embed + insert chunks in bulk.
         document_id = store.create_document(
             name=filename,
-            metadata={"source": filename, "char_count": len(markdown)},
+            metadata={"source": filename, "char_count": len(markdown), "category": category},
+            category=category,
         )
         embeddings = [embedding_provider.embed(chunk) for chunk in chunks]
         store.insert_chunks(
             document_id=document_id,
             chunks=chunks,
             embeddings=embeddings,
-            metadata={"filename": filename},
+            metadata={"filename": filename, "category": category},
         )
 
         logger.info("Indexed %d chunks for '%s' (doc_id=%s)", len(chunks), filename, document_id)
