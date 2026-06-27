@@ -8,7 +8,6 @@ import {
   CopyCheck,
   Download,
   ExternalLink,
-  FileCode2,
   FileText,
   Filter,
   Loader2,
@@ -62,14 +61,6 @@ function formatStatusDate(date?: string | null): string {
 function statusLabelWithDate(status: ApplicationStatus, app?: JobApplication): string {
   const date = app?.status_dates?.[status];
   return date ? `${STATUS_CONFIG[status].label} — ${formatStatusDate(date)}` : STATUS_CONFIG[status].label;
-}
-
-function daysBetween(start?: string | null, end?: string | null): number | null {
-  if (!start || !end) return null;
-  const startTime = new Date(`${start}T00:00:00`).getTime();
-  const endTime = new Date(`${end}T00:00:00`).getTime();
-  if (Number.isNaN(startTime) || Number.isNaN(endTime)) return null;
-  return Math.max(0, Math.round((endTime - startTime) / 86400000));
 }
 
 async function openStorageUrl(bucket: string, value: string) {
@@ -807,45 +798,29 @@ function ApplicationRow({
 
       {expanded && (
         <div className="border-t border-ink/10 px-4 py-4 space-y-4">
-          {/* Command center */}
-          <div className="rounded-lg border border-moss/15 bg-moss/5 p-3">
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <span className="text-xs font-medium text-ink/50">Status:</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ink/45">
+            <label className="flex items-center gap-2">
+              <span>Status</span>
               <select value={app.status} onChange={(e) => onStatusChange(app.id, e.target.value as ApplicationStatus)}
-                className="rounded-md border border-ink/15 bg-white px-2 py-1 text-sm">
+                className="rounded-md border border-ink/15 bg-white px-2 py-1 text-sm text-ink/70">
                 {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
                   <option key={s} value={s}>{statusLabelWithDate(s, app)}</option>
                 ))}
               </select>
-              {app.jd_url && (
-                <a href={app.jd_url} target="_blank" rel="noreferrer"
-                  className="ml-auto flex items-center gap-1 text-xs text-signal hover:underline">
-                  <ExternalLink size={12} /> Source JD
-                </a>
-              )}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <a href={`/convert?application_id=${app.id}&category=job_description`}
-                className="flex items-center justify-center gap-1.5 rounded-md border border-ink/10 bg-white px-3 py-2 text-xs font-medium text-ink hover:bg-ink/5">
-                <FileCode2 size={13} /> Convert / Attach JD
+            </label>
+            <span className="hidden text-ink/20 sm:inline">|</span>
+            <a href={`/convert?application_id=${app.id}&category=job_description`} className="text-moss hover:underline">Convert</a>
+            <a href={`/?application_id=${app.id}&category=job_description&q=${encodeURIComponent(`What should I improve for ${app.role} at ${app.company_name}?`)}`} className="text-moss hover:underline">Search</a>
+            <a href={`/intelligence?application_id=${app.id}`} className="text-moss hover:underline">Intelligence</a>
+            {app.jd_url && (
+              <a href={app.jd_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-signal hover:underline">
+                <ExternalLink size={12} /> Source JD
               </a>
-              <a href={`/?application_id=${app.id}&category=job_description&q=${encodeURIComponent(`What should I improve for ${app.role} at ${app.company_name}?`)}`}
-                className="flex items-center justify-center gap-1.5 rounded-md border border-ink/10 bg-white px-3 py-2 text-xs font-medium text-ink hover:bg-ink/5">
-                <Search size={13} /> Ask Search
-              </a>
-              <a href={`/intelligence?application_id=${app.id}`}
-                className="flex items-center justify-center gap-1.5 rounded-md bg-moss px-3 py-2 text-xs font-semibold text-white hover:bg-moss/90">
-                <Sparkles size={13} /> Tailor Resume
-              </a>
-            </div>
+            )}
             {statusTimeline.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {statusTimeline.map(({ status, date }) => (
-                  <span key={status} className="rounded-full border border-ink/10 bg-white px-2 py-0.5 text-[11px] text-ink/55">
-                    {STATUS_CONFIG[status].label}: {formatStatusDate(date)}
-                  </span>
-                ))}
-              </div>
+              <span className="basis-full text-[11px] text-ink/35">
+                {statusTimeline.map(({ status, date }) => `${STATUS_CONFIG[status].label}: ${formatStatusDate(date)}`).join(" · ")}
+              </span>
             )}
           </div>
 
@@ -1063,17 +1038,6 @@ export default function Tracker() {
     {} as Record<ApplicationStatus, number>
   );
   const highlightedApplicationId = new URLSearchParams(window.location.search).get("application_id");
-  const appliedDurations = apps
-    .map((a) => daysBetween(a.status_dates?.to_apply ?? a.application_date, a.status_dates?.applied))
-    .filter((value): value is number => value != null);
-  const avgDaysToApply = appliedDurations.length
-    ? Math.round(appliedDurations.reduce((sum, value) => sum + value, 0) / appliedDurations.length)
-    : null;
-  const interviewsThisMonth = apps.filter((a) => {
-    const date = a.status_dates?.interview;
-    return date && date.startsWith(new Date().toISOString().slice(0, 7));
-  }).length;
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <header className="mb-6 flex items-center justify-between border-b border-ink/10 pb-5">
@@ -1124,33 +1088,11 @@ export default function Tracker() {
       {apps.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {(["to_apply", "applied", "interview", "offer"] as ApplicationStatus[]).map((s) => (
-            <button key={s} onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
-              className={`rounded-lg border p-3 text-center transition-all ${
-                statusFilter === s
-                  ? "border-moss/40 ring-1 ring-moss/30"
-                  : "border-ink/10"
-              } ${STATUS_CONFIG[s].bg}`}>
+            <div key={s} className={`rounded-lg border border-ink/10 p-3 text-center ${STATUS_CONFIG[s].bg}`}>
               <p className={`text-2xl font-bold ${STATUS_CONFIG[s].color}`}>{counts[s]}</p>
               <p className="text-xs text-ink/50">{STATUS_CONFIG[s].label}</p>
-            </button>
+            </div>
           ))}
-        </div>
-      )}
-
-      {apps.length > 0 && (
-        <div className="mb-6 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-ink/10 bg-white/80 p-3">
-            <p className="text-xs text-ink/45">Avg. to apply</p>
-            <p className="mt-1 text-xl font-semibold text-ink">{avgDaysToApply == null ? "--" : `${avgDaysToApply}d`}</p>
-          </div>
-          <div className="rounded-lg border border-ink/10 bg-white/80 p-3">
-            <p className="text-xs text-ink/45">Interviews this month</p>
-            <p className="mt-1 text-xl font-semibold text-moss">{interviewsThisMonth}</p>
-          </div>
-          <div className="rounded-lg border border-ink/10 bg-white/80 p-3">
-            <p className="text-xs text-ink/45">Ready to send</p>
-            <p className="mt-1 text-xl font-semibold text-fern">{counts.ready}</p>
-          </div>
         </div>
       )}
 
