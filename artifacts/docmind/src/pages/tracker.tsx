@@ -808,10 +808,6 @@ function ApplicationRow({
                 ))}
               </select>
             </label>
-            <span className="hidden text-ink/20 sm:inline">|</span>
-            <a href={`/convert?application_id=${app.id}&category=job_description`} className="text-moss hover:underline">Convert</a>
-            <a href={`/?application_id=${app.id}&category=job_description&q=${encodeURIComponent(`What should I improve for ${app.role} at ${app.company_name}?`)}`} className="text-moss hover:underline">Search</a>
-            <a href={`/intelligence?application_id=${app.id}`} className="text-moss hover:underline">Intelligence</a>
             {app.jd_url && (
               <a href={app.jd_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-signal hover:underline">
                 <ExternalLink size={12} /> Source JD
