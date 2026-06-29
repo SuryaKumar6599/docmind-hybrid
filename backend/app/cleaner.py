@@ -22,6 +22,16 @@ def clean_pdf_text(text: str) -> str:
         text,
     )
 
+    # 1b. Normalize ligature glyphs PDF extractors often leave undecoded:
+    #     "ﬁelds" → "fields", "ﬂow" → "flow", "Insuﬃcient" → "Insufficient"
+    text = (
+        text.replace("\ufb00", "ff")
+        .replace("\ufb01", "fi")
+        .replace("\ufb02", "fl")
+        .replace("\ufb03", "ffi")
+        .replace("\ufb04", "ffl")
+    )
+
     # 2. Fix escaped pipes from table extraction: "\|" → "|"
     text = text.replace(r"\|", "|")
 

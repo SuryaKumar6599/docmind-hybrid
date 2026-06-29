@@ -79,9 +79,9 @@ export function BackendDebugPanel({ apiUrl }: { apiUrl: string }) {
               </div>
               {data.ollama.reachable && (
                 <div className="flex items-center justify-between pl-3 text-ink/45">
-                  <dt>Models (chat/vision/embed)</dt>
+                  <dt>Models (chat/vision/embed/premium)</dt>
                   <dd>
-                    {["chat", "vision", "embed"].map((m) => (data.ollama.models[m] ? "✓" : "✗")).join(" ")}
+                    {["chat", "vision", "embed", "premium_chat"].map((m) => (data.ollama.models[m] ? "✓" : "✗")).join(" ")}
                   </dd>
                 </div>
               )}

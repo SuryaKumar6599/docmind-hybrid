@@ -45,7 +45,72 @@ _MAX_OCR_PAGES = 20
 # Chunking
 # ---------------------------------------------------------------------------
 
+_HEADING_RE = re.compile(r"^(#{1,6})\s+\S.*$")
+
+
 def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str]:
+    """Split *text* into chunks of at most *chunk_size* characters.
+
+    If the text has Markdown headings, split at heading boundaries first
+    ("## Project A" becomes one chunk, "## Project B" becomes another) —
+    much better retrieval quality than slicing through unrelated sections.
+    Any section still too large after that falls back to paragraph/sentence
+    sub-chunking, with the section's heading repeated on each sub-chunk so
+    a chunk retrieved alone still carries its section context.
+
+    Text with no headings at all (plain resumes, pasted JD text) falls back
+    to the original paragraph/sentence chunker directly.
+    """
+    if not text.strip():
+        return []
+
+    if any(_HEADING_RE.match(line) for line in text.splitlines()):
+        return _chunk_by_heading(text, chunk_size, overlap)
+    return _chunk_by_paragraph(text, chunk_size, overlap)
+
+
+def _chunk_by_heading(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """Split into sections at heading boundaries; sub-chunk any oversized section."""
+    lines = text.splitlines()
+    sections: list[str] = []
+    current: list[str] = []
+
+    def flush() -> None:
+        if current:
+            section = "\n".join(current).strip()
+            if section:
+                sections.append(section)
+            current.clear()
+
+    for line in lines:
+        if _HEADING_RE.match(line):
+            flush()
+        current.append(line)
+    flush()
+
+    chunks: list[str] = []
+    for section in sections:
+        section_lines = section.splitlines()
+        heading = section_lines[0] if _HEADING_RE.match(section_lines[0]) else None
+        body = "\n".join(section_lines[1:]).strip() if heading else section
+
+        if not body:
+            # Bare heading with nothing under it before the next heading —
+            # not worth indexing as its own near-empty chunk.
+            continue
+
+        if len(section) <= chunk_size:
+            chunks.append(section)
+        else:
+            # Oversized section: sub-chunk the body, repeating the heading
+            # on each piece so a chunk retrieved alone still has context.
+            for sub_chunk in _chunk_by_paragraph(body, chunk_size, overlap):
+                chunks.append(f"{heading}\n{sub_chunk}" if heading else sub_chunk)
+
+    return chunks
+
+
+def _chunk_by_paragraph(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str]:
     """Split *text* into overlapping chunks of at most *chunk_size* characters.
 
     Strategy:

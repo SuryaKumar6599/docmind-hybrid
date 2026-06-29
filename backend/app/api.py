@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 import datetime as dt
 import re
+import difflib
 
 from .config import Settings, get_settings
 from .document_processing import DocumentProcessor, chunk_text
@@ -45,7 +46,7 @@ from .rag import LocalRAG
 from .schemas import JobMatchAnalysis, TailoredContent
 from .supabase_store import SupabaseVectorStore
 from .docx_renderer import render_tailored_resume
-from .prompts import STAGE2_SYSTEM, build_stage2_user_message
+from .prompts import STAGE1_SYSTEM, STAGE2_SYSTEM, build_stage1_user_message, build_stage2_user_message
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,19 @@ def _validate_extension(filename: str) -> None:
             detail=(
                 f"Unsupported file type '{ext}'. "
                 f"Supported: {', '.join(sorted(_ALLOWED_EXTS))}"
+            ),
+        )
+
+
+def _validate_size(data: bytes, settings: Settings, filename: str) -> None:
+    """Raise HTTP 413 if the uploaded file exceeds the configured limit."""
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"'{filename}' is {len(data) / (1024 * 1024):.1f} MB, "
+                f"which exceeds the {settings.max_upload_size_mb} MB limit."
             ),
         )
 
@@ -139,7 +153,7 @@ def _model_installed(wanted: str, installed: set[str]) -> bool:
 async def health_full(settings: Settings = Depends(get_settings)) -> HealthFullResponse:
     """Detailed status for the debug panel: Ollama + required models, Supabase, tunnel."""
     ollama_reachable = False
-    model_status = {"chat": False, "vision": False, "embed": False}
+    model_status = {"chat": False, "vision": False, "embed": False, "premium_chat": False}
     try:
         resp = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=3)
         ollama_reachable = resp.ok
@@ -148,6 +162,7 @@ async def health_full(settings: Settings = Depends(get_settings)) -> HealthFullR
             model_status["chat"] = _model_installed(settings.ollama_chat_model, installed)
             model_status["vision"] = _model_installed(settings.ollama_vision_model, installed)
             model_status["embed"] = _model_installed(settings.ollama_embed_model, installed)
+            model_status["premium_chat"] = _model_installed(settings.ollama_premium_chat_model, installed)
     except Exception as exc:
         logger.warning("Ollama health-check failed: %s", exc)
 
@@ -165,7 +180,9 @@ async def health_full(settings: Settings = Depends(get_settings)) -> HealthFullR
             logger.warning("Supabase health-check failed: %s", exc)
 
     tunnel_url = _latest_tunnel_url()
-    models_ok = all(model_status.values())
+    # premium_chat is supplementary (Stage 2 tailoring only) — its absence
+    # shouldn't mark the whole app "degraded" the way a missing core model would.
+    models_ok = all(v for k, v in model_status.items() if k != "premium_chat")
 
     if ollama_reachable and models_ok and supabase_reachable:
         overall = "ok"
@@ -221,6 +238,7 @@ async def index_document(
     store: SupabaseVectorStore = Depends(get_store),
     chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
     embedding_provider: BaseEmbeddingProvider = Depends(get_embedding_provider_dep),
+    settings: Settings = Depends(get_settings),
 ):
     """Convert a document to Markdown, chunk it, embed chunks, and upsert into Supabase."""
     filename = file.filename or "document"
@@ -228,8 +246,11 @@ async def index_document(
     suffix = Path(filename).suffix.lower()
     logger.info("Index request: %s (category=%s)", filename, category)
 
+    data = await file.read()
+    _validate_size(data, settings, filename)
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await file.read())
+        tmp.write(data)
         tmp_path = Path(tmp.name)
 
     try:
@@ -312,28 +333,38 @@ async def ask_question(
 # Skills extraction
 # ---------------------------------------------------------------------------
 
-_SKILLS_PROMPT = """\
-Compare the RESUME and JOB DESCRIPTION below and return a structured gap analysis.
+def _reconcile_keyword_contradictions(analysis: JobMatchAnalysis, resume_text: str) -> JobMatchAnalysis:
+    """Deterministic safety net: a keyword can never be both matched and
+    missing. If something in missing_keywords is literally findable in the
+    resume text (case-insensitive, whitespace-normalized), it isn't actually
+    missing -- move it to matched_skills. Catches cases like "Azure AI
+    Search" being flagged missing when it's right there in the resume,
+    even with good prompting an LLM can still slip on this occasionally."""
+    resume_normalized = re.sub(r"\s+", " ", resume_text).lower()
+    still_missing: list[str] = []
+    matched = list(analysis.matched_skills)
+    moved: list[str] = []
 
-Focus on:
-1. Keywords/technologies the JD requires that are ABSENT from the resume → missing_keywords
-2. Skills present in BOTH documents → matched_skills
-3. Overall 0-100 alignment score → match_score
-4. Up to 3 portfolio projects from the resume that best demonstrate fit → recommended_projects
-5. Candidate's 3-5 strongest selling points for this specific role → core_highlights
-6. A concise 15-word pitch summarising the candidate's fit → one_line_pitch
+    for kw in analysis.missing_keywords:
+        kw_normalized = re.sub(r"\s+", " ", kw).strip().lower()
+        if kw_normalized and kw_normalized in resume_normalized:
+            if kw not in matched:
+                matched.append(kw)
+                moved.append(kw)
+        else:
+            still_missing.append(kw)
 
-### RESUME
-{resume_text}
+    if moved:
+        logger.info("Reconciled %d keyword(s) found in resume but flagged missing: %s", len(moved), moved)
 
-### JOB DESCRIPTION
-{jd_text}
-"""
+    return analysis.model_copy(update={"missing_keywords": still_missing, "matched_skills": matched})
 
 
 class SkillsExtractionRequest(BaseModel):
     resume_text: str
     jd_text: str
+    company: str = ""
+    role: str = ""
 
 
 @router.post("/extract-skills", response_model=JobMatchAnalysis)
@@ -353,9 +384,11 @@ async def extract_skills(
         len(body.resume_text), len(body.jd_text),
     )
 
-    prompt = _SKILLS_PROMPT.format(
-        resume_text=body.resume_text[:6000],
-        jd_text=body.jd_text[:3000],
+    user_message = build_stage1_user_message(
+        compressed_jd=body.jd_text[:3000],
+        compressed_resume=body.resume_text[:6000],
+        company=body.company,
+        role=body.role,
     )
 
     try:
@@ -364,18 +397,12 @@ async def extract_skills(
             response_model=JobMatchAnalysis,
             max_retries=3,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert ATS analyst. "
-                        "Respond with valid JSON matching the requested schema exactly. "
-                        "Do not hallucinate projects or skills not present in the resume."
-                    ),
-                },
-                {"role": "user", "content": prompt},
+                {"role": "system", "content": STAGE1_SYSTEM},
+                {"role": "user", "content": user_message},
             ],
             temperature=0.1,
         )
+        result = _reconcile_keyword_contradictions(result, body.resume_text)
         logger.info("Skills extraction complete: match_score=%d", result.match_score)
         return result
     except Exception as exc:
@@ -404,6 +431,7 @@ class ConvertResponse(BaseModel):
 async def convert_document(
     file: UploadFile = File(...),
     chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
+    settings: Settings = Depends(get_settings),
 ) -> ConvertResponse:
     """Convert any supported document to clean Markdown and XML.
 
@@ -419,8 +447,11 @@ async def convert_document(
 
     logger.info("Convert request: %s", filename)
 
+    data = await file.read()
+    _validate_size(data, settings, filename)
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await file.read())
+        tmp.write(data)
         tmp_path = Path(tmp.name)
 
     try:
@@ -467,6 +498,50 @@ class GenerateTailoredRequest(BaseModel):
     role: str
 
 
+_BULLET_PREFIX_RE = re.compile(r"^[-*•▪◦‣·]\s+|^\d+[.)]\s+")
+
+
+def _extract_summary_and_bullets(resume_text: str) -> tuple[str, list[str]]:
+    """Split resume Markdown into a rough summary + experience bullets.
+
+    Recognizes common bullet markers (-, *, •, ▪, ◦, ‣, ·) and numbered
+    lists (1. / 1)) — the original version only matched "- " and "* ",
+    which silently dropped any resume using a different marker, leaving
+    the model nothing real to quote in RewrittenBullet.original.
+    """
+    summary_lines: list[str] = []
+    bullet_lines: list[str] = []
+    for line in resume_text.splitlines():
+        stripped = line.strip()
+        bullet_match = _BULLET_PREFIX_RE.match(stripped)
+        if bullet_match:
+            bullet_lines.append(stripped[bullet_match.end():].strip())
+        elif stripped and not stripped.startswith("#") and len(summary_lines) < 5:
+            summary_lines.append(stripped)
+    return " ".join(summary_lines[:3]), bullet_lines[:20]
+
+
+def _log_bullet_fidelity(tailored: TailoredContent, source_bullets: list[str]) -> None:
+    """Log a warning when a rewritten bullet's 'original' field doesn't
+    closely match anything actually extracted from the resume — signals
+    the model paraphrased/invented an "original" rather than quoting it.
+    Logging only (unlike the keyword reconciliation, there's no
+    deterministic way to know what the real original should have been),
+    but this gives concrete log signal to investigate."""
+    if not source_bullets:
+        return
+    for bullet in tailored.rewritten_bullets:
+        best_ratio = max(
+            difflib.SequenceMatcher(None, bullet.original.lower(), src.lower()).ratio()
+            for src in source_bullets
+        )
+        if best_ratio < 0.5:
+            logger.warning(
+                "Low-fidelity 'original' bullet (best match %.0f%% vs resume): %r",
+                best_ratio * 100, bullet.original[:80],
+            )
+
+
 @router.post("/generate-tailored", response_model=TailoredContent)
 async def generate_tailored(
     body: GenerateTailoredRequest,
@@ -481,22 +556,11 @@ async def generate_tailored(
     if not body.role.strip():
         raise HTTPException(status_code=422, detail="role must not be empty")
 
-    lines = body.resume_text.splitlines()
-    summary_lines: list[str] = []
-    bullet_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("- ") or stripped.startswith("* "):
-            bullet_lines.append(stripped.lstrip("- *").strip())
-        elif stripped and not stripped.startswith("#") and len(summary_lines) < 5:
-            summary_lines.append(stripped)
-
-    original_summary = " ".join(summary_lines[:3])
-    experience_bullets = bullet_lines[:20]
+    original_summary, experience_bullets = _extract_summary_and_bullets(body.resume_text)
 
     logger.info(
-        "Generate tailored: resume=%d chars, company=%r, role=%r",
-        len(body.resume_text), body.company, body.role,
+        "Generate tailored: resume=%d chars, company=%r, role=%r, bullets_found=%d",
+        len(body.resume_text), body.company, body.role, len(experience_bullets),
     )
 
     stage2_messages = [
@@ -508,12 +572,13 @@ async def generate_tailored(
 
     try:
         tailored: TailoredContent = client.chat.completions.create(
-            model=settings.ollama_chat_model,
+            model=settings.ollama_premium_chat_model,
             messages=stage2_messages,
             response_model=TailoredContent,
             max_retries=3,
             temperature=0.3,
         )
+        _log_bullet_fidelity(tailored, experience_bullets)
         logger.info("Generate tailored complete for %r at %r", body.role, body.company)
         return tailored
     except Exception as exc:

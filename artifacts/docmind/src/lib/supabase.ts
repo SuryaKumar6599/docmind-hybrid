@@ -37,7 +37,8 @@ export type ApplicationStatus =
   | "applied"
   | "interview"
   | "offer"
-  | "rejected";
+  | "rejected"
+  | "closed";
 
 export type ApplicationStatusDates = Partial<Record<ApplicationStatus, string>>;
 
@@ -90,11 +91,18 @@ export interface RewrittenBullet {
 }
 
 
+export interface ManualReviewItem {
+  skill: string;
+  draft_bullet: string;
+  reason: string;
+}
+
 export interface Stage2Content {
   tailored_summary: string;
   rewritten_bullets: RewrittenBullet[];
   skills_to_add: string[];
   cover_letter_opening: string;
+  manual_review_items: ManualReviewItem[];
 }
 
 export interface JobApplication {

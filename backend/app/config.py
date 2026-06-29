@@ -19,6 +19,12 @@ class Settings:
     ollama_chat_model: str = "qwen2.5:7b"
     ollama_vision_model: str = "qwen2.5vl:7b"
     ollama_embed_model: str = "nomic-embed-text"
+    # Heavier model reserved for Stage 2 (tailored content generation) only —
+    # this is the quality-critical, creative task (first-person rewriting,
+    # X-Y-Z bullets, fidelity to the source resume). Stage 1 (extraction/
+    # classification) and embeddings stay on the lighter model: ~17GB vs
+    # ~5GB, not worth the latency/resource cost everywhere.
+    ollama_premium_chat_model: str = "qwen3.6:27b"
     
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
     # Token budget constants (8k context window)
@@ -31,6 +37,8 @@ class Settings:
     worker_max_retries: int = 3
     # Docx template path (optional, falls back to programmatic generation)
     docx_template_path: str = ""
+    # Upload guardrail: reject files larger than this before processing
+    max_upload_size_mb: int = 25
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -42,12 +50,14 @@ class Settings:
             embedding_provider=os.getenv("EMBEDDING_PROVIDER", "ollama").lower(),
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
             ollama_chat_model=os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
+            ollama_premium_chat_model=os.getenv("OLLAMA_PREMIUM_CHAT_MODEL", "qwen3.6:27b"),
             ollama_vision_model=os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b"),
             ollama_embed_model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
             cors_origins=tuple(o.strip().rstrip("/") for o in origins.split(",") if o.strip()),
             token_budget_total=int(os.getenv("TOKEN_BUDGET_TOTAL", "8000")),
             worker_poll_interval_seconds=int(os.getenv("WORKER_POLL_INTERVAL", "10")),
             docx_template_path=os.getenv("DOCX_TEMPLATE_PATH", ""),
+            max_upload_size_mb=int(os.getenv("MAX_UPLOAD_SIZE_MB", "25")),
         )
 
     def require_supabase(self) -> None:

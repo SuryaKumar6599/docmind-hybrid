@@ -89,13 +89,35 @@ class RewrittenBullet(BaseModel):
     )
 
 
+class ManualReviewItem(BaseModel):
+    """A JD-required skill with NO evidence anywhere in the resume — not even
+    adjacent experience. Drafted separately from rewritten_bullets so nothing
+    fabricated ever lands in the tailored resume without the candidate
+    explicitly choosing to keep it (unlike skills_to_add, which the candidate
+    can honestly claim today)."""
+
+    skill: str = Field(description="The missing skill or requirement from the JD")
+    draft_bullet: str = Field(
+        description=(
+            "A tentative bullet point ONLY usable if the candidate actually has this "
+            "experience. Phrased so it reads obviously as a draft for the candidate to "
+            "verify, edit, or delete — never inserted into rewritten_bullets automatically."
+        )
+    )
+    reason: str = Field(
+        description="One sentence: why this skill has zero direct or adjacent evidence in the resume"
+    )
+
+
 class TailoredContent(BaseModel):
     """Stage 2 output: rewritten resume sections ready for DOCX injection."""
 
     tailored_summary: str = Field(
         description=(
-            "Rewritten 3–4 sentence professional summary. "
-            "Opens with the one_line_pitch from Stage 1. "
+            "Rewritten 3–4 sentence professional summary, written in FIRST PERSON "
+            "as if the candidate wrote it themselves ('I led...', 'I have...', "
+            "never 'They led...' or the candidate's name in third person). "
+            "Opens with the one_line_pitch from Stage 1, rephrased into first person. "
             "Weaves in the top 3 missing_keywords naturally."
         )
     )
@@ -119,4 +141,13 @@ class TailoredContent(BaseModel):
             "A single compelling opening paragraph (3 sentences) for a cover letter. "
             "Mentions the company name and role title."
         )
+    )
+    manual_review_items: list[ManualReviewItem] = Field(
+        default_factory=list,
+        description=(
+            "JD-required skills with NO evidence anywhere in the resume — not even "
+            "adjacent experience. Empty list if every JD requirement has at least "
+            "adjacent evidence (those go in skills_to_add instead)."
+        ),
+        max_length=6,
     )

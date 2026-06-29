@@ -48,6 +48,7 @@ const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string; b
   interview:          { label: "Interview", color: "text-moss",    bg: "bg-moss/10" },
   offer:              { label: "Offer!",    color: "text-fern",    bg: "bg-fern/20" },
   rejected:           { label: "Rejected",  color: "text-ink/40",  bg: "bg-ink/5" },
+  closed:             { label: "Closed",    color: "text-ink/50",  bg: "bg-ink/10" },
 };
 const PIPELINE_STATUSES: ApplicationStatus[] = ["pending_processing", "processing", "stage1_complete", "ready"];
 
@@ -276,7 +277,7 @@ function QuickSkillsPanel({
       const res = await fetch(`${API_URL}/extract-skills`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume_text: resumeText, jd_text: jdText }),
+        body: JSON.stringify({ resume_text: resumeText, jd_text: jdText, company: trackForm.company, role: trackForm.role }),
       });
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
       setResult(await res.json() as Stage1Analysis);

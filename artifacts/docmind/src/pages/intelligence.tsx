@@ -72,6 +72,10 @@ function tailoredContentToMarkdown(summary: string, bullets: RewrittenBullet[], 
   const lines = ["# Tailored Resume", "", "## Professional Summary", summary.trim(), "", "## Enhanced Bullets"];
   for (const bullet of bullets) lines.push(`- ${bullet.rewritten}`);
   if (content.skills_to_add?.length) lines.push("", "## Skills to Add", ...content.skills_to_add.map((skill) => `- ${skill}`));
+  if (content.manual_review_items?.length) {
+    lines.push("", "## ⚠ Needs Your Review (only keep if true)");
+    for (const item of content.manual_review_items) lines.push(`- [${item.skill}] ${item.draft_bullet}`);
+  }
   if (content.cover_letter_opening) lines.push("", "## Cover Letter Opening", content.cover_letter_opening);
   return lines.join("\n").trim() + "\n";
 }
@@ -220,6 +224,7 @@ export default function Intelligence() {
 
   const [editedSummary, setEditedSummary] = useSessionState("docmind_summary", "");
   const [editedBullets, setEditedBullets] = useSessionState<RewrittenBullet[]>("docmind_bullets", []);
+  const [dismissedReviewItems, setDismissedReviewItems] = useState<Set<string>>(new Set());
 
   // GitHub integration
   const [githubUsername, setGithubUsername] = useSessionState("docmind_githubUsername", "");
@@ -376,6 +381,7 @@ export default function Intelligence() {
     setError(null);
     setAnalysis(null);
     setTailoredContent(null);
+    setDismissedReviewItems(new Set());
     setSkillProjects([]);
     setSelectedProjects(new Set());
     setProjectsAdded(false);
@@ -387,6 +393,8 @@ export default function Intelligence() {
       const analysisData = await fetchJson<Stage1Analysis>(`${API_URL}/extract-skills`, {
         resume_text: resume.markdown_content,
         jd_text: jdText,
+        company,
+        role,
       });
       setAnalysis(analysisData);
 
@@ -522,6 +530,18 @@ export default function Intelligence() {
 
   function removeBullet(idx: number) {
     setEditedBullets((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function acceptManualReviewItem(item: { skill: string; draft_bullet: string }) {
+    setEditedBullets((prev) => [
+      ...prev,
+      { original: "", rewritten: item.draft_bullet, priority: prev.length + 1 },
+    ]);
+    setDismissedReviewItems((prev) => new Set(prev).add(item.skill));
+  }
+
+  function dismissManualReviewItem(skill: string) {
+    setDismissedReviewItems((prev) => new Set(prev).add(skill));
   }
 
   async function downloadDocx() {
@@ -1121,6 +1141,43 @@ export default function Intelligence() {
                                   + {s}
                                 </span>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Needs Your Review — JD requirements with zero evidence in the resume.
+                            Deliberately NOT auto-merged into rewritten_bullets — these need an
+                            explicit human decision before any claim reaches the real resume. */}
+                        {tailoredContent.manual_review_items?.filter((item) => !dismissedReviewItems.has(item.skill)).length > 0 && (
+                          <div className="rounded-lg border border-red-200 bg-red-50/50 p-4">
+                            <div className="mb-1 flex items-center gap-2">
+                              <AlertCircle size={14} className="text-red-500" />
+                              <label className="text-sm font-semibold text-ink">Needs Your Review</label>
+                            </div>
+                            <p className="mb-3 text-xs text-ink/50">
+                              These JD requirements have no evidence anywhere in your resume — not even adjacent experience.
+                              Only keep a draft if it's actually true.
+                            </p>
+                            <div className="space-y-2">
+                              {tailoredContent.manual_review_items
+                                .filter((item) => !dismissedReviewItems.has(item.skill))
+                                .map((item) => (
+                                  <div key={item.skill} className="rounded-md border border-red-100 bg-white p-3">
+                                    <p className="text-xs font-semibold text-red-600">{item.skill}</p>
+                                    <p className="mt-1 text-xs text-ink/40">{item.reason}</p>
+                                    <p className="mt-2 rounded bg-ink/5 px-2 py-1.5 font-mono text-xs text-ink/70">{item.draft_bullet}</p>
+                                    <div className="mt-2 flex gap-2">
+                                      <button onClick={() => acceptManualReviewItem(item)}
+                                        className="rounded-md border border-fern/30 px-2.5 py-1 text-xs font-medium text-fern hover:bg-fern/5 transition-colors">
+                                        This is true — add to bullets
+                                      </button>
+                                      <button onClick={() => dismissManualReviewItem(item.skill)}
+                                        className="rounded-md border border-ink/15 px-2.5 py-1 text-xs font-medium text-ink/50 hover:bg-ink/5 transition-colors">
+                                        Not true — discard
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
                             </div>
                           </div>
                         )}
