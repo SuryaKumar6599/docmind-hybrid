@@ -3,6 +3,7 @@ import { Nav } from "@/components/nav";
 import Resumes from "@/pages/resumes";
 import Tracker from "@/pages/tracker";
 import Convert from "@/pages/convert";
+import { Toaster } from "sonner";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Router />
         </div>
       </div>
+      <Toaster position="bottom-right" />
     </WouterRouter>
   );
 }
