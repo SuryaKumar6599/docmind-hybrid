@@ -812,86 +812,145 @@ function ApplicationRow({
     setTimeout(() => setNotesSaved(false), 2000);
   }
 
-  return (
-    <li className={`rounded-lg border bg-white/80 shadow-sm ${highlighted ? "border-moss/50 ring-2 ring-moss/15" : "border-ink/10"}`}>
-      <div className="flex cursor-pointer items-center gap-4 px-4 py-3" onClick={() => setExpanded((v) => !v)}>
-        <Briefcase className="shrink-0 text-ink/30" size={18} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-ink">
-            {app.role} <span className="text-ink/50">@ {app.company_name}</span>
-          </p>
-          <p className="text-xs text-ink/40">
-            {app.application_date ? new Date(app.application_date).toLocaleDateString() : "No date"}
-            {app.match_score != null && (
-              <span className={`ml-1 border-b-2 pb-px font-medium ${matchScoreAccent(app.match_score)}`}>
-                · {app.match_score}% match
-              </span>
-            )}
-            {currentStatusDate && <span className="ml-1">· {STATUS_CONFIG[app.status].label} on {formatStatusDate(currentStatusDate)}</span>}
-          </p>
-        </div>
-        <div className={`flex min-w-[96px] items-center justify-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color} ${cfg.bg}`}>
-          {isProcessing && <Loader2 className="animate-spin" size={11} />}
-          {cfg.label}
-        </div>
-        {expanded ? <ChevronUp size={16} className="shrink-0 text-ink/30" /> : <ChevronDown size={16} className="shrink-0 text-ink/30" />}
-      </div>
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusRef = useRef<HTMLDivElement>(null);
 
-      {expanded && (
-        <div className="border-t border-ink/10 px-4 py-4 space-y-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ink/45">
-            <label className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <span>Status</span>
-              <select value={app.status} onChange={(e) => { e.stopPropagation(); onStatusChange(app.id, e.target.value as ApplicationStatus); }}
-                className="rounded-md border border-ink/15 bg-white px-2 py-1 text-sm text-ink/70">
+  // Close status popover on outside click
+  useEffect(() => {
+    if (!statusOpen) return;
+    function handleOutside(e: MouseEvent) {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
+        setStatusOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [statusOpen]);
+
+  return (
+    <li className={`rounded-xl border bg-white shadow-sm transition-shadow duration-150 ${highlighted ? "border-moss/40 ring-2 ring-moss/15 shadow-moss/5" : "border-ink/10 hover:shadow-md hover:border-ink/20"}`}>
+      {/* ── Row header: two independent click zones ── */}
+      <div className="flex items-center gap-3 px-4 py-3.5">
+
+        {/* LEFT ZONE — clicking here toggles expand/collapse */}
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          className="flex flex-1 min-w-0 items-center gap-3 text-left"
+        >
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${cfg.bg} transition-colors`}>
+            <Briefcase className={cfg.color} size={15} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-ink leading-tight">
+              {app.role}
+            </p>
+            <p className="truncate text-xs text-ink/50 mt-0.5">
+              {app.company_name}
+              {app.application_date && (
+                <span className="ml-2 text-ink/35">
+                  {new Date(app.application_date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </span>
+              )}
+              {app.match_score != null && (
+                <span className={`ml-2 font-semibold ${matchScoreAccent(app.match_score)}`}>
+                  {app.match_score}%
+                </span>
+              )}
+            </p>
+          </div>
+        </button>
+
+        {/* RIGHT ZONE — status pill (click to change) + chevron (click to expand) */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Status pill — clicking opens popover, does NOT toggle row */}
+          <div ref={statusRef} className="relative">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setStatusOpen(o => !o); }}
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-opacity hover:opacity-80 ${cfg.color} ${cfg.bg}`}
+            >
+              {isProcessing && <Loader2 className="animate-spin" size={11} />}
+              {cfg.label}
+            </button>
+            {statusOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border border-ink/10 bg-white py-1 shadow-xl">
                 {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
-                  <option key={s} value={s}>{statusLabelWithDate(s, app)}</option>
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStatusChange(app.id, s);
+                      setStatusOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-ink/5 ${app.status === s ? "bg-ink/5" : ""}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[s].bg.replace("bg-", "bg-").replace("/10", "").replace("/5", "")} ${STATUS_CONFIG[s].color.replace("text-", "bg-")}`} />
+                    {STATUS_CONFIG[s].label}
+                    {app.status === s && <CheckCircle2 size={11} className="ml-auto text-moss" />}
+                  </button>
                 ))}
-              </select>
-            </label>
-            {app.jd_url && (
-              <a href={app.jd_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 text-signal hover:underline">
-                <ExternalLink size={12} /> Source JD
-              </a>
-            )}
-            {showMarkAppliedCTA && (
-              <button onClick={(e) => { e.stopPropagation(); handleMarkApplied(); }}
-                className="ml-auto flex items-center gap-1.5 rounded-md bg-fern px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-fern/90 transition-colors">
-                <CheckCircle2 size={13} /> Mark as Applied
-              </button>
-            )}
-            {showAppliedToast && (
-              <div className="ml-auto flex items-center gap-1.5 rounded-md bg-fern/10 px-3 py-1.5 text-xs font-medium text-fern animate-in fade-in zoom-in duration-200">
-                <CheckCircle2 size={13} /> Marked applied!
               </div>
-            )}
-            <div className="basis-full h-0"></div>
-            {statusTimeline.length > 0 && (
-              <span className="basis-full text-[11px] text-ink/35">
-                {statusTimeline.map(({ status, date }) => `${STATUS_CONFIG[status].label}: ${formatStatusDate(date)}`).join(" · ")}
-              </span>
             )}
           </div>
 
-          {/* Tab bar (only if there's content) */}
-          {(app.stage1_analysis || app.stage2_content || true) && (
-            <div className="flex gap-1 rounded-lg border border-ink/10 bg-ink/3 p-1">
-              {[
-                { id: "analysis" as const, label: "AI Analysis", show: Boolean(app.stage1_analysis) },
-                { id: "tailored" as const, label: "Tailored Content", show: Boolean(app.stage2_content) || isProcessing },
-                { id: "jd" as const, label: "Job Description", show: Boolean(app.jd_content || app.jd_url) },
-                { id: "notes" as const, label: "Notes", show: true },
-              ].filter((t) => t.show).map((t) => (
-                <button key={t.id} onClick={() => setActiveTab(t.id)}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    activeTab === t.id ? "bg-white shadow-sm text-ink" : "text-ink/50 hover:text-ink"
-                  }`}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Expand/collapse chevron button */}
+          <button
+            type="button"
+            onClick={() => setExpanded(v => !v)}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-ink/30 transition-colors hover:bg-ink/5 hover:text-ink/60"
+          >
+            {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-ink/10 px-4 pb-4 pt-3 space-y-3">
+
+          {/* Action bar */}
+          <div className="flex flex-wrap items-center gap-2">
+            {app.jd_url && (
+              <a href={app.jd_url} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/12 px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors">
+                <ExternalLink size={12} /> Source JD
+              </a>
+            )}
+            {statusTimeline.length > 0 && (
+              <p className="ml-auto text-[11px] text-ink/35 hidden sm:block">
+                {statusTimeline.map(({ status, date }) => `${STATUS_CONFIG[status].label}: ${formatStatusDate(date)}`).join(" · ")}
+              </p>
+            )}
+            {showMarkAppliedCTA && !showAppliedToast && (
+              <button onClick={handleMarkApplied}
+                className="ml-auto flex items-center gap-1.5 rounded-lg bg-fern px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-fern/90 transition-colors">
+                <CheckCircle2 size={12} /> Mark as Applied
+              </button>
+            )}
+            {showAppliedToast && (
+              <div className="ml-auto flex items-center gap-1.5 rounded-lg bg-fern/10 px-3 py-1.5 text-xs font-medium text-fern">
+                <CheckCircle2 size={12} /> Marked applied!
+              </div>
+            )}
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-1 rounded-xl border border-ink/10 bg-ink/[0.03] p-1">
+            {[
+              { id: "analysis" as const, label: "AI Analysis", show: Boolean(app.stage1_analysis) },
+              { id: "tailored" as const, label: "Tailored Resume", show: Boolean(app.stage2_content) || isProcessing },
+              { id: "jd" as const, label: "Job Description", show: Boolean(app.jd_content || app.jd_url) },
+              { id: "notes" as const, label: "Notes", show: true },
+            ].filter((t) => t.show).map((t) => (
+              <button key={t.id} type="button" onClick={() => setActiveTab(t.id)}
+                className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                  activeTab === t.id ? "bg-white shadow-sm text-ink font-semibold" : "text-ink/45 hover:text-ink/70"
+                }`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
 
           {/* Analysis tab */}
           {activeTab === "analysis" && app.stage1_analysis && (
