@@ -1022,6 +1022,19 @@ function ApplicationRow({
             ))}
           </div>
 
+          {/* Analysis tab — no data yet */}
+          {activeTab === "analysis" && !app.stage1_analysis && !isProcessing && (
+            <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-ink/10 px-6 py-10 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-signal/10 text-signal">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-ink/70">No AI analysis yet</p>
+                <p className="mt-1 text-xs text-ink/40">Upload a JD file to trigger Stage 1 skill-gap analysis.</p>
+              </div>
+            </div>
+          )}
+
           {/* Analysis tab */}
           {activeTab === "analysis" && app.stage1_analysis && (
             <div className="rounded-xl border border-ink/10 bg-paper p-4 text-sm">
@@ -1038,11 +1051,13 @@ function ApplicationRow({
                   <p className="text-ink/70 italic text-xs leading-relaxed">"{app.stage1_analysis.one_line_pitch}"</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {/* Matched Skills */}
+              {/* 2-col skill gap visualizer: Matched vs Missing */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-fern/15 bg-fern/5 p-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-fern/70 uppercase tracking-wide">Matched Skills</p>
+                    <p className="text-xs font-semibold text-fern/70 uppercase tracking-wide">
+                      Matched <span className="ml-1 rounded-full bg-fern/20 px-1.5 py-0.5 text-[10px] font-bold text-fern">{app.stage1_analysis.matched_skills?.length ?? 0}</span>
+                    </p>
                     {app.stage1_analysis.matched_skills?.length > 0 && (
                       <CopyButton text={app.stage1_analysis.matched_skills?.join(", ")} label="" />
                     )}
@@ -1054,14 +1069,15 @@ function ApplicationRow({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-ink/30 italic">None matched</p>
+                    <p className="text-[11px] text-ink/30 italic">None matched yet</p>
                   )}
                 </div>
 
-                {/* Missing Keywords */}
                 <div className="rounded-xl border border-amber/15 bg-amber/5 p-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-amber/70 uppercase tracking-wide">ATS Gaps</p>
+                    <p className="text-xs font-semibold text-amber/70 uppercase tracking-wide">
+                      ATS Gaps <span className="ml-1 rounded-full bg-amber/20 px-1.5 py-0.5 text-[10px] font-bold text-amber">{app.stage1_analysis.missing_keywords?.length ?? 0}</span>
+                    </p>
                     {app.stage1_analysis.missing_keywords?.length > 0 && (
                       <CopyButton text={app.stage1_analysis.missing_keywords?.join(", ")} label="" />
                     )}
@@ -1073,24 +1089,24 @@ function ApplicationRow({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-ink/30 italic">No gaps found</p>
+                    <p className="text-[11px] text-fern/60 italic font-medium">No ATS gaps — strong match!</p>
                   )}
                 </div>
-
-                {/* Core Strengths */}
-                {app.stage1_analysis.core_highlights?.length > 0 && (
-                  <div className="rounded-xl border border-moss/15 bg-moss/5 p-3">
-                    <p className="text-xs font-semibold text-moss/70 uppercase tracking-wide mb-2">Core Strengths</p>
-                    <ul className="space-y-1.5">
-                      {app.stage1_analysis.core_highlights?.map((h) => (
-                        <li key={h} className="flex items-start gap-1.5 text-xs text-ink/70 leading-relaxed">
-                          <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={11} />{h}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
+
+              {/* Core Strengths — full width below */}
+              {app.stage1_analysis.core_highlights?.length > 0 && (
+                <div className="rounded-xl border border-moss/15 bg-moss/5 p-3">
+                  <p className="text-xs font-semibold text-moss/70 uppercase tracking-wide mb-2">Core Strengths</p>
+                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                    {app.stage1_analysis.core_highlights?.map((h) => (
+                      <div key={h} className="flex items-start gap-1.5 text-xs text-ink/70 leading-relaxed">
+                        <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={11} />{h}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {app.stage1_analysis.recommended_projects?.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-ink/50 uppercase tracking-wide mb-2 mt-1">Suggested Skill-Gap Projects</p>
@@ -1148,9 +1164,21 @@ function ApplicationRow({
             </div>
           )}
           {activeTab === "tailored" && !app.stage2_content && !isProcessing && (
-            <p className="rounded-md bg-ink/5 px-4 py-6 text-center text-sm text-ink/40">
-              Stage 2 tailoring hasn't run yet — upload a JD file to trigger the full pipeline.
-            </p>
+            <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-ink/10 px-6 py-10 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-moss/10 text-moss">
+                <FileText size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-ink/70">AI tailoring not triggered yet</p>
+                <p className="mt-1 text-xs text-ink/40">Upload a JD file when adding this application to run the full tailoring pipeline.</p>
+              </div>
+              {app.jd_url && (
+                <a href={app.jd_url} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-signal/10 px-3 py-1.5 text-xs font-medium text-signal hover:bg-signal/20 transition-colors">
+                  <ExternalLink size={12} /> View JD Source
+                </a>
+              )}
+            </div>
           )}
 
           {/* JD tab */}
@@ -1165,9 +1193,15 @@ function ApplicationRow({
                   {app.jd_content}
                 </pre>
               ) : app.jd_url ? (
-                <p className="text-sm text-ink/50">Only a source URL is saved for this application.</p>
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                  <p className="text-sm text-ink/50">No text copy stored — view the original posting:</p>
+                  <a href={app.jd_url} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border border-signal/30 bg-signal/8 px-4 py-2 text-sm font-medium text-signal hover:bg-signal/15 transition-colors">
+                    <ExternalLink size={14} /> Open Job Posting
+                  </a>
+                </div>
               ) : (
-                <p className="text-sm text-ink/40">No JD content saved yet. Convert a JD and attach it from the Convert tab.</p>
+                <p className="text-sm text-ink/40">No JD saved. Add a URL above or upload a JD file to trigger AI analysis.</p>
               )}
             </div>
           )}
@@ -1175,16 +1209,23 @@ function ApplicationRow({
           {/* Notes tab */}
           {activeTab === "notes" && (
             <div className="space-y-3">
-              <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add notes about this application — recruiter name, interview prep, salary range…"
+              <textarea
+                rows={5}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onBlur={saveNotes}
+                placeholder="Add notes — recruiter name, interview prep, salary range, referral contact…"
                 className="w-full resize-y rounded-xl border border-ink/15 bg-paper px-4 py-3 text-sm placeholder:text-ink/30 focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all shadow-sm" />
-              <div className="flex items-center gap-3 px-1">
-                <button onClick={saveNotes} disabled={notesSaving}
-                  className="flex items-center gap-1.5 rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/10 transition-colors disabled:opacity-50">
-                  {notesSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
-                  {notesSaving ? "Saving…" : "Save notes"}
-                </button>
-                {notesSaved && <span className="flex items-center gap-1 text-xs text-fern"><CheckCircle2 size={11} /> Saved</span>}
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] text-ink/30">Auto-saves on focus loss</span>
+                <div className="flex items-center gap-3">
+                  <button onClick={saveNotes} disabled={notesSaving}
+                    className="flex items-center gap-1.5 rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/10 transition-colors disabled:opacity-50">
+                    {notesSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                    {notesSaving ? "Saving…" : "Save"}
+                  </button>
+                  {notesSaved && <span className="flex items-center gap-1 text-xs text-fern"><CheckCircle2 size={11} /> Saved</span>}
+                </div>
               </div>
             </div>
           )}
@@ -1367,18 +1408,29 @@ export default function Tracker() {
 
         {/* Stats bar */}
         {apps.length > 0 && (
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Total Tracked</p>
               <p className="mt-0.5 text-2xl font-bold text-ink">{apps.length}</p>
+              <p className="mt-0.5 text-[10px] text-ink/30">{completedCount} completed</p>
             </div>
-            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
-              <p className="text-xs font-medium text-ink/50">In Progress</p>
+            <button
+              onClick={() => setStatusFilter(statusFilter === "all" ? "interview" : "all")}
+              className="rounded-xl border border-amber/20 bg-amber/5 px-4 py-3 shadow-sm text-left transition-all hover:border-amber/40 hover:shadow-md"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-amber/70">In Progress</p>
+                {processingCount > 0 && <span className="flex h-1.5 w-1.5 rounded-full bg-signal animate-pulse" />}
+              </div>
               <p className="mt-0.5 text-2xl font-bold text-amber">{inProgressCount}</p>
-            </div>
-            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
-              <p className="text-xs font-medium text-ink/50">Offers</p>
-              <p className="mt-0.5 text-2xl font-bold text-fern">{counts.offer}</p>
+              <p className="mt-0.5 text-[10px] text-amber/50">click to filter</p>
+            </button>
+            <div className={`rounded-xl border px-4 py-3 shadow-sm ${counts.offer > 0 ? "border-fern/30 bg-fern/5" : "border-ink/8 bg-white dark:bg-white/5"}`}>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-ink/50">Offers</p>
+                {counts.offer > 0 && <span className="flex h-2 w-2 rounded-full bg-fern animate-pulse" />}
+              </div>
+              <p className={`mt-0.5 text-2xl font-bold ${counts.offer > 0 ? "text-fern" : "text-ink/30"}`}>{counts.offer}</p>
             </div>
             <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Avg. Match Score</p>

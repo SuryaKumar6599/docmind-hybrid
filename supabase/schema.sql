@@ -201,13 +201,13 @@ insert into storage.buckets (id, name, public)
 alter table resumes enable row level security;
 create policy "Users see own resumes"
   on resumes for all
-  using (auth.uid() = user_id);
+  using (auth.uid()::text = user_id::text);
 
 -- RLS: job_applications table
 alter table job_applications enable row level security;
 create policy "Users see own applications"
   on job_applications for all
-  using (auth.uid() = user_id);
+  using (auth.uid()::text = user_id::text);
 
 -- RLS: documents — readable by authenticated users
 alter table documents enable row level security;
