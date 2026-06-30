@@ -99,101 +99,98 @@ function ResumeRow({
   }
 
   return (
-    <li className={`rounded-lg border border-ink/10 bg-white/80 shadow-sm ${resume.parent_resume_id ? "ml-6 border-moss/20" : ""}`}>
-      <div className="flex items-center gap-3 px-4 py-3">
-        <FileText className="shrink-0 text-ink/40" size={20} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-ink">
-            {resume.original_filename}
-            {resume.is_default && (
-              <span className="ml-2 rounded-full bg-amber/15 px-2 py-0.5 text-[10px] font-semibold text-amber align-middle">Default</span>
-            )}
-            {resume.parent_resume_id && (
-              <span className="ml-2 rounded-full bg-moss/10 px-2 py-0.5 text-[10px] font-semibold text-moss align-middle">Tailored</span>
-            )}
-            {childCount > 0 && (
-              <span className="ml-2 rounded-full bg-ink/5 px-2 py-0.5 text-[10px] font-semibold text-ink/50 align-middle">{childCount} version{childCount === 1 ? "" : "s"}</span>
-            )}
-          </p>
-          <p className="text-xs text-ink/50">
-            {new Date(resume.created_at).toLocaleDateString()}
-            {wordCount != null && ` · ${wordCount.toLocaleString()} words`}
-          </p>
-        </div>
+    <li className={`rounded-xl border bg-white shadow-sm transition-shadow duration-150 ${resume.is_default ? "border-moss/40 ring-2 ring-moss/15 shadow-moss/5" : "border-ink/10 hover:shadow-md hover:border-ink/20"}`}>
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        
+        {/* Left Side: Click to expand */}
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex flex-1 items-center gap-3 text-left min-w-0"
+        >
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${cfg.bg} transition-colors`}>
+            <Icon className={cfg.color} size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-ink leading-tight flex items-center gap-2">
+              {resume.original_filename}
+              {resume.parent_resume_id && (
+                <span className="rounded bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-ink/40">Tailored</span>
+              )}
+            </p>
+            <p className="truncate text-xs text-ink/50 mt-0.5">
+              {new Date(resume.created_at).toLocaleDateString(undefined, {
+                year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+              })}
+              {wordCount != null && <span className="ml-2">· {wordCount} words</span>}
+              {childCount > 0 && <span className="ml-2 font-medium text-ink/60">· {childCount} derived</span>}
+            </p>
+          </div>
+        </button>
 
-        {/* Status badge */}
-        <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color} ${cfg.bg}`}>
-          <Icon size={12} className={resume.status === "processing" ? "animate-spin" : undefined} />
-          {cfg.label}
-        </div>
+        {/* Right Side: Actions */}
+        <div className="flex shrink-0 items-center gap-2">
+          {!resume.parent_resume_id && resume.status === "ready" && (
+            <button
+              onClick={handleSetDefault}
+              disabled={settingDefault || resume.is_default}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all ${
+                resume.is_default ? "bg-moss text-white shadow-sm" : "bg-ink/5 text-ink/50 hover:bg-ink/10 hover:text-ink/80"
+              }`}
+              title="Default resume for Quick Skills Check"
+            >
+              <Star size={12} className={resume.is_default ? "fill-white" : ""} />
+              {resume.is_default ? "Default" : "Set Default"}
+            </button>
+          )}
 
-        {/* Use as default (ready only) */}
-        {resume.status === "ready" && (
-          <button onClick={handleSetDefault} disabled={resume.is_default || settingDefault}
-            className={`rounded-md p-1.5 transition-colors ${
-              resume.is_default ? "text-amber" : "text-ink/20 hover:bg-amber/10 hover:text-amber"
-            }`}
-            title={resume.is_default ? "Default resume" : "Use as default resume"}>
-            {settingDefault ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} className={resume.is_default ? "fill-amber" : undefined} />}
-          </button>
-        )}
-
-        {/* Expand markdown button (ready only) */}
-        {resume.status === "ready" && resume.markdown_content && (
-          <button onClick={() => setExpanded((v) => !v)}
-            className="rounded-md p-1.5 text-ink/30 hover:bg-ink/5 hover:text-ink transition-colors"
-            title="View extracted Markdown">
+          <button onClick={() => setExpanded((v) => !v)} className="flex h-7 w-7 items-center justify-center rounded-md text-ink/30 transition-colors hover:bg-ink/5 hover:text-ink/60">
             {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </button>
-        )}
-
-        {/* Delete */}
-        <button onClick={handleDelete} disabled={deleting}
-          className="rounded-md p-1.5 text-ink/20 hover:bg-red-50 hover:text-red-500 transition-colors"
-          title="Delete resume">
-          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-        </button>
+        </div>
       </div>
 
-      {/* Markdown preview */}
-      {expanded && resume.markdown_content && (
-        <div className="border-t border-ink/10">
-          <div className="flex items-center justify-between border-b border-ink/5 bg-paper px-4 py-2">
-            <div className="flex items-center gap-3 text-xs text-ink/40">
-              <span className="flex items-center gap-1"><Hash size={10} /> {resume.markdown_content.length.toLocaleString()} chars</span>
-              <span>~{Math.round(resume.markdown_content.length / 4).toLocaleString()} tokens</span>
+      {expanded && (
+        <div className="border-t border-ink/10 px-5 pb-5 pt-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => downloadText("markdown")}
+                disabled={!resume.markdown_content}
+                className="flex items-center gap-1.5 rounded-lg border border-ink/12 px-3 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
+              >
+                <Download size={14} /> Download Markdown
+              </button>
+              <button
+                onClick={() => downloadText("xml")}
+                disabled={!resume.markdown_content}
+                className="flex items-center gap-1.5 rounded-lg border border-ink/12 px-3 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
+              >
+                <Download size={14} /> Download XML
+              </button>
+              <button
+                onClick={copyMarkdown}
+                disabled={!resume.markdown_content}
+                className="flex items-center gap-1.5 rounded-lg border border-ink/12 px-3 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
+              >
+                {copied ? <CopyCheck size={14} className="text-fern" /> : <Copy size={14} />}
+                {copied ? "Copied!" : "Copy"}
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+              >
+                <Trash2 size={14} /> {deleting ? "Deleting…" : "Delete"}
+              </button>
             </div>
-            <div className="flex gap-2">
-              <button onClick={copyMarkdown}
-                className="flex items-center gap-1.5 rounded-md border border-ink/10 px-2.5 py-1 text-xs text-ink/50 hover:bg-ink/5 hover:text-ink transition-colors">
-                {copied ? <CopyCheck size={11} className="text-fern" /> : <Copy size={11} />}
-                {copied ? "Copied!" : "Copy Markdown"}
-              </button>
-              <button onClick={() => downloadText("markdown")}
-                className="flex items-center gap-1.5 rounded-md border border-ink/10 px-2.5 py-1 text-xs text-ink/50 hover:bg-ink/5 hover:text-ink transition-colors">
-                <Download size={11} /> .md
-              </button>
-              <button onClick={() => downloadText("xml")}
-                className="flex items-center gap-1.5 rounded-md border border-moss/20 px-2.5 py-1 text-xs text-moss hover:bg-moss/5 transition-colors">
-                <Download size={11} /> .xml
-              </button>
+            <div className="mt-4 rounded-xl border border-ink/10 bg-paper p-4 text-xs font-mono text-ink/70 max-h-64 overflow-y-auto shadow-inner">
+              {resume.status === "error" ? (
+                <span className="text-red-500">Processing failed. Please try again.</span>
+              ) : resume.markdown_content ? (
+                <pre className="whitespace-pre-wrap">{resume.markdown_content.slice(0, 500)}...</pre>
+              ) : (
+                <span className="italic">Indexing in progress... (this usually takes 10-20 seconds)</span>
+              )}
             </div>
-          </div>
-          <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-ink/70">
-            {resume.markdown_content}
-          </pre>
-        </div>
-      )}
-
-      {/* Error message */}
-      {resume.status === "error" && resume.error_message && (
-        <div className="flex items-start gap-2 border-t border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600">
-          <XCircle size={14} className="mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold">Parsing failed</p>
-            <p className="mt-0.5 text-red-600/80">{resume.error_message}</p>
-            <p className="mt-1 text-red-500/70">Try deleting and re-uploading, or check the file isn't corrupted/password-protected.</p>
-          </div>
         </div>
       )}
     </li>
@@ -291,40 +288,36 @@ export default function Resumes() {
   });
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <header className="mb-6 border-b border-ink/10 pb-5">
-        <p className="text-sm font-semibold text-moss">DocMind</p>
-        <h1 className="mt-1 text-3xl font-semibold text-ink">My Resumes</h1>
-        <p className="mt-1 text-sm text-ink/60">
-          Upload your base resume (PDF or DOCX). The local worker indexes it for tailoring.
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+      <header className="mb-8 border-b border-ink/10 pb-6">
+        <p className="text-xs font-semibold uppercase tracking-widest text-moss">DocMind</p>
+        <h1 className="mt-1 text-3xl font-bold text-ink">My Library</h1>
+        <p className="mt-2 text-sm text-ink/60">
+          Manage your base resumes and AI-tailored versions.
         </p>
-      </header>
 
-      {!isSupabaseConfigured && (
-        <div className="mb-6 rounded-lg border border-amber/30 bg-amber/5 p-4 text-sm text-ink/70">
-          <strong>Supabase not configured.</strong> Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
-        </div>
-      )}
-
-      {/* Stats row */}
-      {resumes.length > 0 && (
-        <div className="mb-6 flex gap-4">
-          <div className="rounded-lg border border-ink/10 bg-white/80 px-4 py-2.5 text-center">
-            <p className="text-lg font-bold text-fern">{readyCount}</p>
-            <p className="text-xs text-ink/50">Ready</p>
-          </div>
-          <div className="rounded-lg border border-ink/10 bg-white/80 px-4 py-2.5 text-center">
-            <p className="text-lg font-bold text-ink/60">{resumes.length}</p>
-            <p className="text-xs text-ink/50">Total</p>
-          </div>
-          {processingCount > 0 && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber/30 bg-amber/5 px-4 py-2.5 text-sm text-amber">
-              <Loader2 size={14} className="animate-spin" />
-              {processingCount} processing…
+        {/* Stats bar */}
+        {resumes.length > 0 && (
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Total</p>
+              <p className="mt-0.5 text-2xl font-bold text-ink">{resumes.length}</p>
             </div>
-          )}
-        </div>
-      )}
+            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Ready</p>
+              <p className="mt-0.5 text-2xl font-bold text-fern">{readyCount}</p>
+            </div>
+            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Tailored</p>
+              <p className="mt-0.5 text-2xl font-bold text-moss">{resumes.length - readyCount - processingCount > 0 ? resumes.length - readyCount - processingCount : 0}</p>
+            </div>
+            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Processing</p>
+              <p className="mt-0.5 text-2xl font-bold text-amber">{processingCount}</p>
+            </div>
+          </div>
+        )}
+      </header>
 
       {/* Upload area (drag & drop) */}
       <section
@@ -338,14 +331,14 @@ export default function Resumes() {
       >
         <UploadCloud className={`mx-auto mb-3 transition-colors ${dragOver ? "text-moss" : "text-ink/30"}`} size={40} />
         <p className="mb-1 text-sm font-medium text-ink/60">
-          {dragOver ? "Drop to upload" : "Drag & drop or click to upload"}
+          {dragOver ? "Drop to upload" : "Upload new base resume"}
         </p>
-        <p className="text-xs text-ink/35">PDF or DOCX · max 10 MB</p>
+        <p className="text-xs text-ink/35">PDF or DOCX · 10 MB limit</p>
         <input ref={fileRef} type="file" accept=".pdf,.docx" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadResume(f); }} />
         {uploading && (
           <div className="mt-4 flex items-center justify-center gap-2 text-sm text-signal">
-            <Loader2 size={16} className="animate-spin" /> Uploading…
+            <Loader2 size={16} className="animate-spin" /> Processing…
           </div>
         )}
       </section>
@@ -356,15 +349,28 @@ export default function Resumes() {
 
       {/* Resume list */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-ink/40">
-          <Loader2 className="animate-spin" size={24} />
-        </div>
+        <ul className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="animate-pulse rounded-xl border border-ink/10 bg-white/80 px-5 py-4 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="h-9 w-9 shrink-0 rounded-full bg-ink/8" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 w-1/3 rounded-full bg-ink/10" />
+                  <div className="h-2.5 w-1/4 rounded-full bg-ink/6" />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : resumes.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-center text-ink/40">
-          <div>
-            <FileText className="mx-auto mb-2" size={32} />
-            <p>No resumes yet. Upload one to get started.</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 bg-white/50 px-6 py-24 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-moss/10 text-moss">
+            <FileText size={32} />
           </div>
+          <h2 className="text-xl font-semibold text-ink">No resumes yet</h2>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-ink/60">
+            Upload your base resume above. We'll automatically index it so it's ready for AI-powered tailoring.
+          </p>
         </div>
       ) : (
         <ul className="space-y-3">

@@ -154,12 +154,12 @@ export default function Convert() {
     : "text-red-500";
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
       {/* Header */}
-      <header className="mb-6 border-b border-ink/10 pb-5">
-        <p className="text-sm font-semibold text-moss">DocMind</p>
-        <h1 className="mt-1 text-3xl font-semibold text-ink">Markdown &amp; XML Generator</h1>
-        <p className="mt-1 text-sm text-ink/60">
+      <header className="mb-8 border-b border-ink/10 pb-6">
+        <p className="text-xs font-semibold uppercase tracking-widest text-moss">DocMind</p>
+        <h1 className="mt-1 text-3xl font-bold text-ink">Markdown &amp; XML Generator</h1>
+        <p className="mt-2 text-sm text-ink/60">
           Convert any document to clean Markdown using Microsoft MarkItDown — optimised for LLM input prompts. An XML version of the same extracted content is generated alongside it.
         </p>
       </header>
@@ -168,7 +168,7 @@ export default function Convert() {
         {/* Left sidebar */}
         <div className="space-y-4">
           {/* Backend status */}
-          <div className="flex items-center justify-between rounded-lg border border-ink/10 bg-white/80 px-4 py-3 shadow-sm">
+          <div className="flex items-center justify-between rounded-xl border border-ink/10 bg-white/80 px-4 py-3 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-ink">
               <Server size={16} /> Local backend
             </div>
@@ -177,7 +177,7 @@ export default function Convert() {
 
 
           {/* Supported formats */}
-          <div className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">
+          <div className="rounded-xl border border-ink/10 bg-white/80 p-4 shadow-sm">
             <p className="mb-3 text-sm font-semibold text-ink">Supported formats</p>
             <div className="flex flex-wrap gap-1.5">
               {SUPPORTED_FORMATS.map(({ ext, color }) => (
@@ -190,7 +190,7 @@ export default function Convert() {
           </div>
 
           {/* Token guide */}
-          <div className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">
+          <div className="rounded-xl border border-ink/10 bg-white/80 p-4 shadow-sm">
             <p className="mb-2 text-sm font-semibold text-ink">Token budget guide</p>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center gap-2">
@@ -210,7 +210,7 @@ export default function Convert() {
 
           {/* Conversion history (this session) */}
           {history.length > 0 && (
-            <div className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">
+            <div className="rounded-xl border border-ink/10 bg-white/80 p-4 shadow-sm">
               <p className="mb-2 text-sm font-semibold text-ink">Recent conversions</p>
               <p className="mb-3 text-xs text-ink/35">This session only — clears on reload.</p>
               <ul className="space-y-1.5">
@@ -235,7 +235,7 @@ export default function Convert() {
           )}
 
           {/* How to use */}
-          <div className="rounded-lg border border-ink/10 bg-white/80 p-4 shadow-sm">
+          <div className="rounded-xl border border-ink/10 bg-white/80 p-4 shadow-sm">
             <p className="mb-2 text-sm font-semibold text-ink">MarkItDown Features</p>
             <ul className="space-y-1.5 text-xs text-ink/60 list-disc list-inside">
               <li>Converts Office docs & PDF to clean Markdown</li>
@@ -298,7 +298,7 @@ export default function Convert() {
           </button>
 
           {backendStatus !== "connected" && (
-            <p className="rounded-md bg-amber/10 px-4 py-2.5 text-sm text-amber">
+            <p className="rounded-xl bg-amber/10 px-4 py-3 text-sm text-amber border border-amber/20 shadow-sm">
               {backendStatus === "starting"
                 ? "Checking connection to local backend…"
                 : API_URL
@@ -308,8 +308,8 @@ export default function Convert() {
           )}
 
           {error && (
-            <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-              <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-600 shadow-sm">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
               {error}
             </div>
           )}
