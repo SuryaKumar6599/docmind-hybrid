@@ -31,6 +31,7 @@ import {
 
 import { useBackendStatus, type BackendStatus } from "../lib/useBackendStatus";
 import { BackendStatusDot } from "../components/BackendStatusDot";
+import confetti from "canvas-confetti";
 
 // Removed static API_URL
 
@@ -1258,6 +1259,24 @@ export default function Tracker() {
     const statusDates = withStatusDate(app?.status_dates, status);
     await supabase.from("job_applications").update({ status, status_dates: statusDates }).eq("id", id);
     setApps((prev) => prev.map((a) => (a.id === id ? { ...a, status, status_dates: statusDates } : a)));
+
+    // Trigger animations based on the new status
+    if (status === "offer") {
+      const duration = 3000;
+      const end = Date.now() + duration;
+      const frame = () => {
+        confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#4caf7d', '#f5a623', '#2563eb'] });
+        confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#4caf7d', '#f5a623', '#2563eb'] });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      };
+      frame();
+    } else if (status === "interviewing") {
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ['#f5a623', '#2563eb'] });
+    } else if (status === "rejected") {
+      confetti({ particleCount: 50, spread: 120, origin: { y: 0.4 }, colors: ['#a0aec0', '#718096'], gravity: 1.5, scalar: 0.8, ticks: 150 });
+    } else if (status === "applied") {
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 }, colors: ['#4caf7d'], gravity: 0.6 });
+    }
   }
 
   async function saveNotes(id: string, notes: string) {
