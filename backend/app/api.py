@@ -18,6 +18,7 @@ from pathlib import Path
 
 import instructor
 import requests
+from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from openai import OpenAI
@@ -242,7 +243,8 @@ def _reconcile_keyword_contradictions(analysis: JobMatchAnalysis, resume_text: s
 
 class SkillsExtractionRequest(BaseModel):
     resume_text: str
-    jd_text: str
+    jd_text: str = ""
+    jd_url: str = ""
     company: str = ""
     role: str = ""
 
@@ -256,16 +258,31 @@ async def extract_skills(
     """On-demand skills gap analysis from raw resume + JD text."""
     if not body.resume_text.strip():
         raise HTTPException(status_code=422, detail="resume_text must not be empty")
-    if not body.jd_text.strip():
-        raise HTTPException(status_code=422, detail="jd_text must not be empty")
+        
+    jd_text_resolved = body.jd_text.strip()
+    
+    if not jd_text_resolved and body.jd_url.strip():
+        try:
+            logger.info("Fetching JD text from URL: %s", body.jd_url)
+            resp = requests.get(body.jd_url.strip(), timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.content, "html.parser")
+            # Extract text, separating elements with a space
+            jd_text_resolved = soup.get_text(separator=" ", strip=True)
+        except Exception as e:
+            logger.warning("Failed to fetch/parse JD URL %s: %s", body.jd_url, e)
+            raise HTTPException(status_code=422, detail=f"Failed to extract text from JD URL: {e}")
+
+    if not jd_text_resolved:
+        raise HTTPException(status_code=422, detail="jd_text or jd_url must not be empty")
 
     logger.info(
         "Skills extraction: resume=%d chars, jd=%d chars",
-        len(body.resume_text), len(body.jd_text),
+        len(body.resume_text), len(jd_text_resolved),
     )
 
     user_message = build_stage1_user_message(
-        compressed_jd=body.jd_text[:3000],
+        compressed_jd=jd_text_resolved[:3000],
         compressed_resume=body.resume_text[:6000],
         company=body.company,
         role=body.role,

@@ -233,6 +233,8 @@ function QuickSkillsPanel({
   const [open, setOpen] = useState(false);
   const [resumeText, setResumeText] = useState("");
   const [jdText, setJdText] = useState("");
+  const [jdUrl, setJdUrl] = useState("");
+  const [jdInputMode, setJdInputMode] = useState<"text" | "url">("text");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Stage1Analysis | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -250,7 +252,7 @@ function QuickSkillsPanel({
   const [loadedApplicationId, setLoadedApplicationId] = useState("");
 
   const readyResumes = resumes.filter((r) => r.status === "ready");
-  const canAnalyse = resumeText.trim().length > 0 && jdText.trim().length > 0;
+  const canAnalyse = resumeText.trim().length > 0 && (jdInputMode === "url" ? jdUrl.trim().length > 0 : jdText.trim().length > 0);
 
   function handleLoadApplication(id: string) {
     setLoadedApplicationId(id);
@@ -265,8 +267,16 @@ function QuickSkillsPanel({
   }
 
   async function analyse() {
-    if (!resumeText.trim() || !jdText.trim()) {
-      setErr("Paste both your resume text and the job description.");
+    if (!resumeText.trim()) {
+      setErr("Paste your resume text first.");
+      return;
+    }
+    if (jdInputMode === "text" && !jdText.trim()) {
+      setErr("Paste the job description text or switch to URL mode.");
+      return;
+    }
+    if (jdInputMode === "url" && !jdUrl.trim()) {
+      setErr("Enter the job description URL or switch to text mode.");
       return;
     }
     setLoading(true); setErr(null); setResult(null); setShowTrack(false); setSaved(false); setLoadingStage(0);
@@ -274,10 +284,20 @@ function QuickSkillsPanel({
       setLoadingStage((s) => Math.min(s + 1, LOADING_STAGES.length - 1));
     }, 1700);
     try {
+      const payload: Record<string, string> = {
+        resume_text: resumeText,
+        company: trackForm.company,
+        role: trackForm.role,
+      };
+      if (jdInputMode === "url") {
+        payload.jd_url = jdUrl.trim();
+      } else {
+        payload.jd_text = jdText.trim();
+      }
       const res = await fetch(`${API_URL}/extract-skills`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume_text: resumeText, jd_text: jdText, company: trackForm.company, role: trackForm.role }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
       setResult(await res.json() as Stage1Analysis);
@@ -394,13 +414,54 @@ function QuickSkillsPanel({
               <label className="text-xs font-medium text-ink/50">Resume (plain text)</label>
               <textarea rows={10} value={resumeText} onChange={(e) => setResumeText(e.target.value)}
                 placeholder="Paste your resume text here…"
-                className="w-full resize-y rounded-md border border-ink/15 bg-paper px-3 py-2 text-sm placeholder:text-ink/25 focus:border-moss focus:outline-none" />
+                className="w-full resize-y rounded-xl border border-ink/15 bg-paper px-3 py-2.5 text-sm placeholder:text-ink/25 focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-ink/50">Job description (plain text)</label>
-              <textarea rows={10} value={jdText} onChange={(e) => setJdText(e.target.value)}
-                placeholder="Paste the job description here…"
-                className="w-full resize-y rounded-md border border-ink/15 bg-paper px-3 py-2 text-sm placeholder:text-ink/25 focus:border-moss focus:outline-none" />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-ink/50">Job Description</label>
+                <div className="flex items-center gap-0.5 rounded-lg border border-ink/10 bg-ink/5 p-0.5">
+                  <button
+                    onClick={() => setJdInputMode("text")}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                      jdInputMode === "text"
+                        ? "bg-white text-ink shadow-sm"
+                        : "text-ink/40 hover:text-ink/70"
+                    }`}
+                  >
+                    Paste Text
+                  </button>
+                  <button
+                    onClick={() => setJdInputMode("url")}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                      jdInputMode === "url"
+                        ? "bg-white text-ink shadow-sm"
+                        : "text-ink/40 hover:text-ink/70"
+                    }`}
+                  >
+                    <ExternalLink size={10} className="inline mr-1 -mt-0.5" />URL
+                  </button>
+                </div>
+              </div>
+              {jdInputMode === "text" ? (
+                <textarea rows={10} value={jdText} onChange={(e) => setJdText(e.target.value)}
+                  placeholder="Paste the job description here…"
+                  className="w-full resize-y rounded-xl border border-ink/15 bg-paper px-3 py-2.5 text-sm placeholder:text-ink/25 focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all" />
+              ) : (
+                <div className="flex flex-col gap-2 h-full">
+                  <input
+                    type="url"
+                    value={jdUrl}
+                    onChange={(e) => setJdUrl(e.target.value)}
+                    placeholder="https://jobs.company.com/opening/..."
+                    className="w-full rounded-xl border border-ink/15 bg-paper px-3 py-2.5 text-sm placeholder:text-ink/25 focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all"
+                  />
+                  <p className="text-[11px] text-ink/40 leading-relaxed mt-1">
+                    The AI will fetch and extract the job description text automatically.
+                    Works best with standard job pages (LinkedIn, Indeed, Greenhouse, Lever).
+                    Some ATS portals may be restricted.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -907,7 +968,7 @@ function ApplicationRow({
       </div>
 
       {expanded && (
-        <div className="border-t border-ink/10 px-4 pb-4 pt-3 space-y-3">
+        <div className="border-t border-ink/10 px-5 pb-5 pt-4 space-y-4">
 
           {/* Action bar */}
           <div className="flex flex-wrap items-center gap-2">
@@ -954,12 +1015,13 @@ function ApplicationRow({
 
           {/* Analysis tab */}
           {activeTab === "analysis" && app.stage1_analysis && (
-            <div className="rounded-md border border-ink/10 bg-paper p-3 text-sm space-y-3">
-              <div className="flex items-center gap-4">
+            <div className="rounded-xl border border-ink/10 bg-paper p-4 text-sm">
+              {/* Score + pitch row */}
+              <div className="flex items-start gap-4 mb-4 pb-4 border-b border-ink/8">
                 <ScoreCircle score={app.stage1_analysis.match_score} />
                 <div className="flex-1 min-w-0">
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-moss">AI Analysis</p>
+                    <p className="text-xs font-semibold text-moss">FAANG-Standard AI Analysis</p>
                     <p className="text-[10px] text-ink/35">
                       Last analysed {new Date(app.updated_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                     </p>
@@ -967,19 +1029,19 @@ function ApplicationRow({
                   <p className="text-ink/70 italic text-xs leading-relaxed">"{app.stage1_analysis.one_line_pitch}"</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {/* Matched Skills */}
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className="text-xs font-medium text-ink/50">Matched skills</p>
+                <div className="rounded-xl border border-fern/15 bg-fern/5 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-fern/70 uppercase tracking-wide">Matched Skills</p>
                     {app.stage1_analysis.matched_skills?.length > 0 && (
                       <CopyButton text={app.stage1_analysis.matched_skills?.join(", ")} label="" />
                     )}
                   </div>
                   {app.stage1_analysis.matched_skills?.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1.5">
                       {app.stage1_analysis.matched_skills?.map((s) => (
-                        <span key={s} className="rounded-full bg-fern/15 px-2 py-0.5 text-xs text-fern">{s}</span>
+                        <span key={s} className="rounded-full bg-fern/15 px-2.5 py-0.5 text-xs font-medium text-fern">{s}</span>
                       ))}
                     </div>
                   ) : (
@@ -988,54 +1050,58 @@ function ApplicationRow({
                 </div>
 
                 {/* Missing Keywords */}
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className="text-xs font-medium text-ink/50">Missing keywords</p>
+                <div className="rounded-xl border border-amber/15 bg-amber/5 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-amber/70 uppercase tracking-wide">ATS Gaps</p>
                     {app.stage1_analysis.missing_keywords?.length > 0 && (
                       <CopyButton text={app.stage1_analysis.missing_keywords?.join(", ")} label="" />
                     )}
                   </div>
                   {app.stage1_analysis.missing_keywords?.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1.5">
                       {app.stage1_analysis.missing_keywords?.map((kw) => (
-                        <span key={kw} className="rounded-full bg-amber/15 px-2 py-0.5 text-xs text-amber">{kw}</span>
+                        <span key={kw} className="rounded-full bg-amber/15 px-2.5 py-0.5 text-xs font-medium text-amber">{kw}</span>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-ink/30 italic">None missing</p>
+                    <p className="text-[11px] text-ink/30 italic">No gaps found</p>
                   )}
                 </div>
+
+                {/* Core Strengths */}
+                {app.stage1_analysis.core_highlights?.length > 0 && (
+                  <div className="rounded-xl border border-moss/15 bg-moss/5 p-3">
+                    <p className="text-xs font-semibold text-moss/70 uppercase tracking-wide mb-2">Core Strengths</p>
+                    <ul className="space-y-1.5">
+                      {app.stage1_analysis.core_highlights?.map((h) => (
+                        <li key={h} className="flex items-start gap-1.5 text-xs text-ink/70 leading-relaxed">
+                          <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={11} />{h}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-              {app.stage1_analysis.core_highlights?.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-ink/50 mb-1">Strengths for this role</p>
-                  <ul className="space-y-0.5">
-                    {app.stage1_analysis.core_highlights?.map((h) => (
-                      <li key={h} className="flex items-start gap-1.5 text-ink/70">
-                        <CheckCircle2 className="mt-0.5 shrink-0 text-fern" size={12} />{h}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               {app.stage1_analysis.recommended_projects?.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-ink/50 mb-1 mt-2">Suggested Skill-Gap Projects</p>
-                  <div className="space-y-2">
+                  <p className="text-xs font-semibold text-ink/50 uppercase tracking-wide mb-2 mt-1">Suggested Skill-Gap Projects</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {app.stage1_analysis.recommended_projects?.map((p) => (
-                      <div key={p.project_title} className="rounded-md border border-ink/10 bg-white p-3 text-sm">
-                        <div className="flex items-start justify-between gap-4">
-                          <p className="font-semibold text-ink">{p.project_title}</p>
+                      <div key={p.project_title} className="rounded-xl border border-ink/10 bg-white p-3.5 text-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="font-semibold text-ink text-xs leading-snug">{p.project_title}</p>
                           <div className="flex flex-wrap justify-end gap-1 shrink-0">
                             {p.skills_targeted?.map(s => (
-                              <span key={s} className="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-amber">{s}</span>
+                              <span key={s} className="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber">{s}</span>
                             ))}
                           </div>
                         </div>
-                        <p className="text-xs text-ink/60 mt-1.5 leading-relaxed">{p.one_line_description}</p>
-                        <p className="mt-2 text-[11px] font-mono text-moss/80 bg-moss/5 rounded px-2 py-1 inline-block">
-                          {p.suggested_tech_stack?.join(" · ")}
-                        </p>
+                        <p className="text-[11px] text-ink/55 mt-2 leading-relaxed">{p.one_line_description}</p>
+                        {p.suggested_tech_stack?.length > 0 && (
+                          <p className="mt-2 text-[10px] font-mono text-moss/80 bg-moss/5 rounded px-2 py-1 inline-block">
+                            {p.suggested_tech_stack?.join(" · ")}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1216,16 +1282,19 @@ export default function Tracker() {
   const inProgressCount = PIPELINE_STATUSES.reduce((sum, s) => sum + counts[s], 0) + counts.interview;
   const completedCount = counts.applied + counts.rejected + counts.closed;
   const processingCount = counts.pending_processing + counts.processing;
+  const averageScore = apps.filter(a => a.match_score != null).length > 0
+    ? Math.round(apps.filter(a => a.match_score != null).reduce((s, a) => s + (a.match_score ?? 0), 0) / apps.filter(a => a.match_score != null).length)
+    : null;
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <header className="mb-6 border-b border-ink/10 pb-5">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+      <header className="mb-8 border-b border-ink/10 pb-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-moss">DocMind</p>
-            <h1 className="mt-1 text-3xl font-semibold text-ink">Application Tracker</h1>
+            <p className="text-xs font-semibold uppercase tracking-widest text-moss">DocMind</p>
+            <h1 className="mt-1 text-3xl font-bold text-ink">Application Tracker</h1>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-ink/60">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-medium text-ink/60 shadow-sm">
               <BackendStatusDot status={backendStatus} apiUrl={API_URL ?? ""} />
               {processingCount > 0 ? (
                 <span className="text-signal animate-pulse">Processing {processingCount} app{processingCount !== 1 ? 's' : ''}...</span>
@@ -1233,30 +1302,40 @@ export default function Tracker() {
                 <span>{backendStatus === "connected" ? "AI Ready" : backendStatus === "offline" ? "AI Offline" : "Connecting..."}</span>
               )}
             </div>
-            <div className="h-6 w-px bg-ink/10"></div>
-            <div className="flex items-center gap-2">
-              {apps.length > 0 && (
-                <button onClick={() => exportToCSV(apps)}
-                  className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-2 text-sm text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors">
-                  <Download size={14} /> Export CSV
-                </button>
-              )}
-              <button onClick={() => setShowModal(true)} disabled={!isSupabaseConfigured}
-                className="flex items-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-semibold text-white disabled:bg-ink/25">
-                <PlusCircle size={16} /> Add Application
+            <div className="h-6 w-px bg-ink/10" />
+            {apps.length > 0 && (
+              <button onClick={() => exportToCSV(apps)}
+                className="flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors shadow-sm">
+                <Download size={14} /> Export CSV
               </button>
-            </div>
+            )}
+            <button onClick={() => setShowModal(true)} disabled={!isSupabaseConfigured}
+              className="flex items-center gap-2 rounded-lg bg-moss px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-moss/90 transition-colors disabled:bg-ink/25">
+              <PlusCircle size={16} /> Add Application
+            </button>
           </div>
         </div>
+
+        {/* Stats bar */}
         {apps.length > 0 && (
-          <div className="mt-6 flex gap-6 text-sm">
-            <div className="flex flex-col">
-              <span className="text-ink/50">In Progress</span>
-              <span className="text-xl font-bold text-ink">{inProgressCount}</span>
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Total Tracked</p>
+              <p className="mt-0.5 text-2xl font-bold text-ink">{apps.length}</p>
             </div>
-            <div className="flex flex-col">
-              <span className="text-ink/50">Completed</span>
-              <span className="text-xl font-bold text-ink">{completedCount}</span>
+            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">In Progress</p>
+              <p className="mt-0.5 text-2xl font-bold text-amber">{inProgressCount}</p>
+            </div>
+            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Offers</p>
+              <p className="mt-0.5 text-2xl font-bold text-fern">{counts.offer}</p>
+            </div>
+            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Avg. Match Score</p>
+              <p className={`mt-0.5 text-2xl font-bold ${averageScore != null ? matchScoreAccent(averageScore) : "text-ink/30"}`}>
+                {averageScore != null ? `${averageScore}%` : "—"}
+              </p>
             </div>
           </div>
         )}
@@ -1289,27 +1368,35 @@ export default function Tracker() {
 
       {/* Pipeline summary */}
       {apps.length > 0 && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {(["to_apply", "applied", "interview", "offer"] as ApplicationStatus[]).map((s) => (
-            <div key={s} className={`rounded-lg border border-ink/10 p-3 text-center ${STATUS_CONFIG[s].bg}`}>
-              <p className={`text-2xl font-bold ${STATUS_CONFIG[s].color}`}>{counts[s]}</p>
-              <p className="text-xs text-ink/50">{STATUS_CONFIG[s].label}</p>
-            </div>
+        <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-6">
+          {(["to_apply", "applied", "interview", "offer", "rejected", "closed"] as ApplicationStatus[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
+              className={`rounded-xl border p-3 text-center transition-all hover:shadow-md ${
+                statusFilter === s
+                  ? `${STATUS_CONFIG[s].bg} border-current shadow-sm ring-1 ring-current/30`
+                  : "border-ink/10 bg-white hover:border-ink/20"
+              } ${STATUS_CONFIG[s].color}`}
+            >
+              <p className="text-2xl font-bold">{counts[s]}</p>
+              <p className="text-[11px] font-medium opacity-70 mt-0.5">{STATUS_CONFIG[s].label}</p>
+            </button>
           ))}
         </div>
       )}
 
       {/* Filter/search bar */}
       {apps.length > 0 && (
-        <div className="mb-4 flex gap-2">
+        <div className="mb-5 flex gap-2">
           <div className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/30" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search company or role…"
-              className="w-full rounded-md border border-ink/15 bg-white py-2 pl-9 pr-3 text-sm focus:border-moss focus:outline-none" />
+              className="w-full rounded-xl border border-ink/15 bg-white py-2.5 pl-10 pr-3 text-sm shadow-sm focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all" />
           </div>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "all")}
-            className="rounded-md border border-ink/15 bg-white px-3 py-2 text-sm text-ink/70">
+            className="rounded-xl border border-ink/15 bg-white px-3 py-2.5 text-sm text-ink/70 shadow-sm focus:border-moss focus:outline-none">
             <option value="all">All statuses</option>
             {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
               <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
@@ -1317,22 +1404,25 @@ export default function Tracker() {
           </select>
           {(search || statusFilter !== "all") && (
             <button onClick={() => { setSearch(""); setStatusFilter("all"); }}
-              className="rounded-md px-3 py-2 text-sm text-ink/40 hover:text-ink">Clear</button>
+              className="rounded-xl border border-ink/15 bg-white px-4 py-2.5 text-sm text-ink/50 hover:text-ink shadow-sm transition-colors">Clear</button>
           )}
         </div>
       )}
 
       {loading ? (
         <ul className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <li key={i} className="animate-pulse rounded-lg border border-ink/10 bg-white/80 px-4 py-3 shadow-sm">
+          {[0, 1, 2, 3].map((i) => (
+            <li key={i} className="animate-pulse rounded-xl border border-ink/10 bg-white/80 px-5 py-4 shadow-sm">
               <div className="flex items-center gap-4">
-                <div className="h-[18px] w-[18px] shrink-0 rounded bg-ink/10" />
+                <div className="h-9 w-9 shrink-0 rounded-full bg-ink/8" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3.5 w-2/5 rounded bg-ink/10" />
-                  <div className="h-2.5 w-1/4 rounded bg-ink/5" />
+                  <div className="h-3.5 w-2/5 rounded-full bg-ink/10" />
+                  <div className="h-2.5 w-1/4 rounded-full bg-ink/6" />
                 </div>
-                <div className="h-6 w-24 shrink-0 rounded-full bg-ink/10" />
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-20 shrink-0 rounded-full bg-ink/8" />
+                  <div className="h-7 w-7 shrink-0 rounded-md bg-ink/6" />
+                </div>
               </div>
             </li>
           ))}
