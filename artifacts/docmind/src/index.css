@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --color-ink: #17211d;
   --color-moss: #315343;
@@ -7,6 +9,7 @@
   --color-paper: #f7f4ed;
   --color-signal: #2f6fed;
   --color-amber: #c8812f;
+  --color-cream: #fdfbf7;
 }
 
 * {

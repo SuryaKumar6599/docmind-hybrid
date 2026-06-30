@@ -4,6 +4,8 @@ import Resumes from "@/pages/resumes";
 import Tracker from "@/pages/tracker";
 import Convert from "@/pages/convert";
 import { Toaster } from "sonner";
+import { CommandPalette } from "@/components/CommandPalette";
+import { ThemeProvider } from "next-themes";
 
 function Router() {
   return (
@@ -26,14 +28,17 @@ function Router() {
 
 export default function App() {
   return (
-    <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-      <div className="flex min-h-screen flex-col">
-        <Nav />
-        <div className="flex-1 pb-16 sm:pb-0">
-          <Router />
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <div className="flex min-h-screen flex-col bg-cream dark:bg-[#0f1115] text-ink dark:text-cream transition-colors duration-300">
+          <Nav />
+          <div className="flex-1 pb-16 sm:pb-0">
+            <Router />
+          </div>
         </div>
-      </div>
-      <Toaster position="bottom-right" />
-    </WouterRouter>
+        <Toaster position="bottom-right" />
+        <CommandPalette />
+      </WouterRouter>
+    </ThemeProvider>
   );
 }

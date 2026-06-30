@@ -33,6 +33,7 @@ import { useBackendStatus, type BackendStatus } from "../lib/useBackendStatus";
 import { BackendStatusDot } from "../components/BackendStatusDot";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
+import { AnalyticsDashboard } from "../components/AnalyticsDashboard";
 
 // Removed static API_URL
 
@@ -83,7 +84,13 @@ function matchScoreAccent(score: number): string {
   return "text-red-500 border-red-300";
 }
 
-const LOADING_STAGES = ["Comparing resume and JD…", "Extracting missing keywords…", "Scoring your fit…"];
+const LOADING_STAGES = [
+  "Extracting Job Description...",
+  "Mapping skills against the FAANG hiring bar...",
+  "Identifying critical skill gaps...",
+  "Generating actionable project recommendations...",
+  "Finalizing analysis...",
+];
 
 // ---------------------------------------------------------------------------
 // CSV export
@@ -284,7 +291,7 @@ function QuickSkillsPanel({
     setLoading(true); setErr(null); setResult(null); setShowTrack(false); setSaved(false); setLoadingStage(0);
     const stageTimer = setInterval(() => {
       setLoadingStage((s) => Math.min(s + 1, LOADING_STAGES.length - 1));
-    }, 1700);
+    }, 2500);
     try {
       const payload: Record<string, string> = {
         resume_text: resumeText,
@@ -1427,6 +1434,9 @@ export default function Tracker() {
           ))}
         </div>
       )}
+
+      {/* Analytics Dashboard */}
+      {apps.length > 0 && <AnalyticsDashboard apps={apps} />}
 
       {/* Filter/search bar */}
       {apps.length > 0 && (
