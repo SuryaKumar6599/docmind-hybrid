@@ -168,7 +168,7 @@ export default function Convert() {
         {/* Left sidebar */}
         <div className="space-y-4">
           {/* Backend status */}
-          <div className="flex items-center justify-between rounded-xl border border-ink/10 bg-white/80 px-4 py-3 shadow-sm">
+          <div className="flex items-center justify-between rounded-xl border border-ink/10 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-ink">
               <Server size={16} /> Local backend
             </div>
@@ -177,7 +177,7 @@ export default function Convert() {
 
 
           {/* Supported formats */}
-          <div className="rounded-xl border border-ink/10 bg-white/80 p-4 shadow-sm">
+          <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
             <p className="mb-3 text-sm font-semibold text-ink">Supported formats</p>
             <div className="flex flex-wrap gap-1.5">
               {SUPPORTED_FORMATS.map(({ ext, color }) => (
@@ -190,7 +190,7 @@ export default function Convert() {
           </div>
 
           {/* Token guide */}
-          <div className="rounded-xl border border-ink/10 bg-white/80 p-4 shadow-sm">
+          <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
             <p className="mb-2 text-sm font-semibold text-ink">Token budget guide</p>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center gap-2">
@@ -210,7 +210,7 @@ export default function Convert() {
 
           {/* Conversion history (this session) */}
           {history.length > 0 && (
-            <div className="rounded-xl border border-ink/10 bg-white/80 p-4 shadow-sm">
+            <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
               <p className="mb-2 text-sm font-semibold text-ink">Recent conversions</p>
               <p className="mb-3 text-xs text-ink/35">This session only — clears on reload.</p>
               <ul className="space-y-1.5">
@@ -235,7 +235,7 @@ export default function Convert() {
           )}
 
           {/* How to use */}
-          <div className="rounded-xl border border-ink/10 bg-white/80 p-4 shadow-sm">
+          <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
             <p className="mb-2 text-sm font-semibold text-ink">MarkItDown Features</p>
             <ul className="space-y-1.5 text-xs text-ink/60 list-disc list-inside">
               <li>Converts Office docs & PDF to clean Markdown</li>
@@ -257,7 +257,7 @@ export default function Convert() {
             onDrop={handleDrop}
             onClick={() => !file && fileRef.current?.click()}
             className={`relative cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-              dragOver ? "border-moss bg-moss/5" : file ? "border-moss/40 bg-moss/3 cursor-default" : "border-ink/15 bg-white/60 hover:border-ink/30"
+              dragOver ? "border-moss bg-moss/5" : file ? "border-moss/40 bg-moss/3 cursor-default" : "border-ink/15 bg-white dark:bg-white/5/60 hover:border-ink/30"
             }`}
           >
             <input ref={fileRef} type="file" className="hidden" onChange={handleFile}
@@ -316,7 +316,7 @@ export default function Convert() {
 
           {/* Results */}
           {result && (
-            <div className="rounded-xl border border-ink/10 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 shadow-sm overflow-hidden">
               {/* Stats bar */}
               <div className="flex flex-wrap items-center gap-4 border-b border-ink/10 bg-paper px-4 py-3">
                 <div className="flex items-center gap-1.5 text-sm">
@@ -344,7 +344,7 @@ export default function Convert() {
 
               {/* Format toggle + actions */}
               <div className="flex flex-wrap items-center gap-3 border-b border-ink/10 bg-paper/50 px-4 py-2.5">
-                <div className="flex rounded-md border border-ink/15 bg-white p-0.5 text-xs font-medium">
+                <div className="flex rounded-md border border-ink/15 bg-white dark:bg-white/5 p-0.5 text-xs font-medium">
                   <button onClick={() => setViewFormat("markdown")}
                     className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
                       viewFormat === "markdown" ? "bg-moss text-white" : "text-ink/50 hover:text-ink"

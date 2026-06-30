@@ -99,7 +99,7 @@ function ResumeRow({
   }
 
   return (
-    <li className={`rounded-xl border bg-white shadow-sm transition-shadow duration-150 ${resume.is_default ? "border-moss/40 ring-2 ring-moss/15 shadow-moss/5" : "border-ink/10 hover:shadow-md hover:border-ink/20"}`}>
+    <li className={`rounded-xl border bg-white dark:bg-white/5 shadow-sm transition-shadow duration-150 ${resume.is_default ? "border-moss/40 ring-2 ring-moss/15 shadow-moss/5" : "border-ink/10 hover:shadow-md hover:border-ink/20"}`}>
       <div className="flex items-center gap-3 px-4 py-3.5">
         
         {/* Left Side: Click to expand */}
@@ -299,19 +299,19 @@ export default function Resumes() {
         {/* Stats bar */}
         {resumes.length > 0 && (
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Total</p>
               <p className="mt-0.5 text-2xl font-bold text-ink">{resumes.length}</p>
             </div>
-            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Ready</p>
               <p className="mt-0.5 text-2xl font-bold text-fern">{readyCount}</p>
             </div>
-            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Tailored</p>
               <p className="mt-0.5 text-2xl font-bold text-moss">{resumes.length - readyCount - processingCount > 0 ? resumes.length - readyCount - processingCount : 0}</p>
             </div>
-            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Processing</p>
               <p className="mt-0.5 text-2xl font-bold text-amber">{processingCount}</p>
             </div>
@@ -326,7 +326,7 @@ export default function Resumes() {
         onDrop={handleDrop}
         onClick={() => fileRef.current?.click()}
         className={`mb-8 cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-          dragOver ? "border-moss bg-moss/5" : "border-ink/15 bg-white/60 hover:border-ink/30"
+          dragOver ? "border-moss bg-moss/5" : "border-ink/15 bg-white dark:bg-white/5/60 hover:border-ink/30"
         }`}
       >
         <UploadCloud className={`mx-auto mb-3 transition-colors ${dragOver ? "text-moss" : "text-ink/30"}`} size={40} />
@@ -351,7 +351,7 @@ export default function Resumes() {
       {loading ? (
         <ul className="space-y-3">
           {[0, 1, 2].map((i) => (
-            <li key={i} className="animate-pulse rounded-xl border border-ink/10 bg-white/80 px-5 py-4 shadow-sm">
+            <li key={i} className="animate-pulse rounded-xl border border-ink/10 bg-white dark:bg-white/5 px-5 py-4 shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="h-9 w-9 shrink-0 rounded-full bg-ink/8" />
                 <div className="flex-1 space-y-2">
@@ -363,7 +363,7 @@ export default function Resumes() {
           ))}
         </ul>
       ) : resumes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 bg-white/50 px-6 py-24 text-center">
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 bg-white dark:bg-white/5 px-6 py-24 text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-moss/10 text-moss">
             <FileText size={32} />
           </div>

@@ -12,6 +12,12 @@
   --color-cream: #fdfbf7;
 }
 
+.dark {
+  --color-ink: #fdfbf7;
+  --color-cream: #0f1115;
+  --color-paper: #1a1c21;
+}
+
 * {
   box-sizing: border-box;
 }

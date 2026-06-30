@@ -160,7 +160,7 @@ function Stage2Panel({ content }: { content: Stage2Content }) {
     <div className="space-y-4">
       {/* Cover letter opening */}
       {content.cover_letter_opening && (
-        <div className="rounded-xl border border-ink/10 bg-white p-3">
+        <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold text-ink/50 uppercase tracking-wide">Cover Letter Opening</p>
             <CopyButton text={content.cover_letter_opening} label="Copy paragraph" />
@@ -171,7 +171,7 @@ function Stage2Panel({ content }: { content: Stage2Content }) {
 
       {/* Tailored summary */}
       {content.tailored_summary && (
-        <div className="rounded-xl border border-ink/10 bg-white p-3">
+        <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold text-ink/50 uppercase tracking-wide">Tailored Summary</p>
             <CopyButton text={content.tailored_summary} label="Copy summary" />
@@ -188,7 +188,7 @@ function Stage2Panel({ content }: { content: Stage2Content }) {
           </p>
           <div className="space-y-2">
             {sorted.map((b, i) => (
-              <div key={i} className="grid grid-cols-2 gap-3 rounded-xl border border-ink/10 bg-white p-4 text-xs">
+              <div key={i} className="grid grid-cols-2 gap-3 rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 text-xs">
                 <div>
                   <p className="mb-1 font-medium text-ink/40">Original</p>
                   <p className="text-ink/60 leading-relaxed">{b.original}</p>
@@ -379,7 +379,7 @@ function QuickSkillsPanel({
   }
 
   return (
-    <div className="mb-6 rounded-xl border border-ink/10 bg-white/80 shadow-sm overflow-hidden">
+    <div className="mb-6 rounded-xl border border-ink/10 bg-white dark:bg-white/5 shadow-sm overflow-hidden">
       <button onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-3 px-5 py-3.5 text-left hover:bg-ink/3 transition-colors">
         <Sparkles size={16} className="shrink-0 text-moss" />
@@ -433,7 +433,7 @@ function QuickSkillsPanel({
                     onClick={() => setJdInputMode("text")}
                     className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all ${
                       jdInputMode === "text"
-                        ? "bg-white text-ink shadow-sm"
+                        ? "bg-white dark:bg-white/5 text-ink shadow-sm"
                         : "text-ink/40 hover:text-ink/70"
                     }`}
                   >
@@ -443,7 +443,7 @@ function QuickSkillsPanel({
                     onClick={() => setJdInputMode("url")}
                     className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all ${
                       jdInputMode === "url"
-                        ? "bg-white text-ink shadow-sm"
+                        ? "bg-white dark:bg-white/5 text-ink shadow-sm"
                         : "text-ink/40 hover:text-ink/70"
                     }`}
                   >
@@ -513,19 +513,19 @@ function QuickSkillsPanel({
                   <label className="mb-1 block text-xs font-medium text-ink/50">Company</label>
                   <input value={trackForm.company} disabled={!!loadedApplicationId}
                     onChange={(e) => setTrackForm({ ...trackForm, company: e.target.value })}
-                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm disabled:bg-ink/5 disabled:text-ink/50" placeholder="Acme Corp" />
+                    className="w-full rounded-md border border-ink/15 bg-white dark:bg-white/5 px-3 py-1.5 text-sm disabled:bg-ink/5 disabled:text-ink/50" placeholder="Acme Corp" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink/50">Role</label>
                   <input value={trackForm.role} disabled={!!loadedApplicationId}
                     onChange={(e) => setTrackForm({ ...trackForm, role: e.target.value })}
-                    className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm disabled:bg-ink/5 disabled:text-ink/50" placeholder="Senior Engineer" />
+                    className="w-full rounded-md border border-ink/15 bg-white dark:bg-white/5 px-3 py-1.5 text-sm disabled:bg-ink/5 disabled:text-ink/50" placeholder="Senior Engineer" />
                 </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-ink/50">Base Resume</label>
                 <select value={trackForm.resume_id} onChange={(e) => setTrackForm({ ...trackForm, resume_id: e.target.value })}
-                  className="w-full rounded-md border border-ink/15 bg-white px-3 py-1.5 text-sm">
+                  className="w-full rounded-md border border-ink/15 bg-white dark:bg-white/5 px-3 py-1.5 text-sm">
                   {readyResumes.map((r) => <option key={r.id} value={r.id}>{r.original_filename}</option>)}
                   {readyResumes.length === 0 && <option disabled>No ready resumes — upload one first</option>}
                 </select>
@@ -621,7 +621,7 @@ function QuickSkillsPanel({
                   <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">Suggested Skill-Gap Projects</p>
                   <div className="space-y-2">
                     {result.recommended_projects?.map((p) => (
-                      <div key={p.project_title} className="rounded-md border border-ink/10 bg-white p-3 text-sm">
+                      <div key={p.project_title} className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3 text-sm">
                         <div className="flex items-start justify-between gap-4">
                           <p className="font-semibold text-ink">{p.project_title}</p>
                           <div className="flex flex-wrap justify-end gap-1 shrink-0">
@@ -766,7 +766,7 @@ function AddAppModal({
               {form.resume_id && <CheckCircle2 size={12} className="text-fern" />}
             </label>
             <select value={form.resume_id} onChange={(e) => setForm({ ...form, resume_id: e.target.value })}
-              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none">
+              className="w-full rounded-lg border border-ink/15 bg-white dark:bg-white/5 px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none">
               {ready.map((r) => <option key={r.id} value={r.id}>{r.original_filename}</option>)}
             </select>
           </div>
@@ -776,14 +776,14 @@ function AddAppModal({
               <input value={form.company_name}
                 onChange={(e) => setForm({ ...form, company_name: e.target.value })}
                 onBlur={checkDuplicate}
-                className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="Acme Corp" />
+                className="w-full rounded-lg border border-ink/15 bg-white dark:bg-white/5 px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="Acme Corp" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-ink/60">Role *</label>
               <input value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
                 onBlur={checkDuplicate}
-                className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="Senior Engineer" />
+                className="w-full rounded-lg border border-ink/15 bg-white dark:bg-white/5 px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="Senior Engineer" />
             </div>
           </div>
           {dupWarning && (
@@ -795,7 +795,7 @@ function AddAppModal({
               {form.jd_url && !jdFile && <CheckCircle2 size={12} className="text-fern" />}
             </label>
             <input value={form.jd_url} onChange={(e) => setForm({ ...form, jd_url: e.target.value })}
-              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="https://jobs.example.com/..." />
+              className="w-full rounded-lg border border-ink/15 bg-white dark:bg-white/5 px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="https://jobs.example.com/..." />
           </div>
           <div>
             <label className="mb-1 flex items-center gap-2 text-xs font-medium text-ink/60">
@@ -804,7 +804,7 @@ function AddAppModal({
             </label>
             <input type="file" accept=".pdf,.docx,.txt"
               onChange={(e) => setJdFile(e.target.files?.[0] ?? null)}
-              className="block w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm file:mr-2 file:rounded file:border-0 file:bg-moss file:px-2 file:py-1 file:text-xs file:font-semibold file:text-white" />
+              className="block w-full rounded-lg border border-ink/15 bg-white dark:bg-white/5 px-3 py-2 text-sm shadow-sm file:mr-2 file:rounded file:border-0 file:bg-moss file:px-2 file:py-1 file:text-xs file:font-semibold file:text-white" />
           </div>
           {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 shadow-sm">{err}</p>}
         </div>
@@ -898,7 +898,7 @@ function ApplicationRow({
   }, [statusOpen]);
 
   return (
-    <li className={`rounded-xl border bg-white shadow-sm transition-shadow duration-150 ${highlighted ? "border-moss/40 ring-2 ring-moss/15 shadow-moss/5" : "border-ink/10 hover:shadow-md hover:border-ink/20"}`}>
+    <li className={`rounded-xl border bg-white dark:bg-white/5 shadow-sm transition-shadow duration-150 ${highlighted ? "border-moss/40 ring-2 ring-moss/15 shadow-moss/5" : "border-ink/10 hover:shadow-md hover:border-ink/20"}`}>
       {/* ── Row header: two independent click zones ── */}
       <div className="flex items-center gap-3 px-4 py-3.5">
 
@@ -944,7 +944,7 @@ function ApplicationRow({
               {cfg.label}
             </button>
             {statusOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border border-ink/10 bg-white py-1 shadow-xl">
+              <div className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border border-ink/10 bg-white dark:bg-white/5 py-1 shadow-xl">
                 {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
                   <button
                     key={s}
@@ -1015,7 +1015,7 @@ function ApplicationRow({
             ].filter((t) => t.show).map((t) => (
               <button key={t.id} type="button" onClick={() => setActiveTab(t.id)}
                 className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                  activeTab === t.id ? "bg-white shadow-sm text-ink font-semibold" : "text-ink/45 hover:text-ink/70"
+                  activeTab === t.id ? "bg-white dark:bg-white/5 shadow-sm text-ink font-semibold" : "text-ink/45 hover:text-ink/70"
                 }`}>
                 {t.label}
               </button>
@@ -1096,7 +1096,7 @@ function ApplicationRow({
                   <p className="text-xs font-semibold text-ink/50 uppercase tracking-wide mb-2 mt-1">Suggested Skill-Gap Projects</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {app.stage1_analysis.recommended_projects?.map((p) => (
-                      <div key={p.project_title} className="rounded-xl border border-ink/10 bg-white p-3.5 text-sm">
+                      <div key={p.project_title} className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-3.5 text-sm">
                         <div className="flex items-start justify-between gap-3">
                           <p className="font-semibold text-ink text-xs leading-snug">{p.project_title}</p>
                           <div className="flex flex-wrap justify-end gap-1 shrink-0">
@@ -1125,7 +1125,7 @@ function ApplicationRow({
           )}
           {activeTab === "tailored" && !app.stage2_content && isProcessing && (
             <div className="space-y-4 animate-pulse">
-              <div className="rounded-md border border-ink/10 bg-white p-3">
+              <div className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3">
                 <div className="mb-3 h-3 w-32 rounded bg-ink/10" />
                 <div className="space-y-2">
                   <div className="h-2.5 w-full rounded bg-ink/5" />
@@ -1133,7 +1133,7 @@ function ApplicationRow({
                   <div className="h-2.5 w-4/5 rounded bg-ink/5" />
                 </div>
               </div>
-              <div className="rounded-md border border-ink/10 bg-white p-3">
+              <div className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3">
                 <div className="mb-3 h-3 w-28 rounded bg-ink/10" />
                 <div className="space-y-2">
                   <div className="h-2.5 w-full rounded bg-ink/5" />
@@ -1142,8 +1142,8 @@ function ApplicationRow({
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-md border border-ink/10 bg-white p-3 h-24" />
-                <div className="rounded-md border border-ink/10 bg-white p-3 h-24" />
+                <div className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3 h-24" />
+                <div className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3 h-24" />
               </div>
             </div>
           )}
@@ -1161,7 +1161,7 @@ function ApplicationRow({
                 {app.jd_content && <CopyButton text={app.jd_content} label="Copy JD" />}
               </div>
               {app.jd_content ? (
-                <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-xl border border-ink/5 bg-white p-4 font-mono text-xs leading-relaxed text-ink/70">
+                <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-xl border border-ink/5 bg-white dark:bg-white/5 p-4 font-mono text-xs leading-relaxed text-ink/70">
                   {app.jd_content}
                 </pre>
               ) : app.jd_url ? (
@@ -1343,7 +1343,7 @@ export default function Tracker() {
             <h1 className="mt-1 text-3xl font-bold text-ink">Application Tracker</h1>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-medium text-ink/60 shadow-sm">
+            <div className="flex items-center gap-2 rounded-full border border-ink/10 bg-white dark:bg-white/5 px-3 py-1.5 text-xs font-medium text-ink/60 shadow-sm">
               <BackendStatusDot status={backendStatus} apiUrl={API_URL ?? ""} />
               {processingCount > 0 ? (
                 <span className="text-signal animate-pulse">Processing {processingCount} app{processingCount !== 1 ? 's' : ''}...</span>
@@ -1368,19 +1368,19 @@ export default function Tracker() {
         {/* Stats bar */}
         {apps.length > 0 && (
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Total Tracked</p>
               <p className="mt-0.5 text-2xl font-bold text-ink">{apps.length}</p>
             </div>
-            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">In Progress</p>
               <p className="mt-0.5 text-2xl font-bold text-amber">{inProgressCount}</p>
             </div>
-            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Offers</p>
               <p className="mt-0.5 text-2xl font-bold text-fern">{counts.offer}</p>
             </div>
-            <div className="rounded-xl border border-ink/8 bg-white px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
               <p className="text-xs font-medium text-ink/50">Avg. Match Score</p>
               <p className={`mt-0.5 text-2xl font-bold ${averageScore != null ? matchScoreAccent(averageScore) : "text-ink/30"}`}>
                 {averageScore != null ? `${averageScore}%` : "—"}
@@ -1425,7 +1425,7 @@ export default function Tracker() {
               className={`rounded-xl border p-3 text-center transition-all hover:shadow-md ${
                 statusFilter === s
                   ? `${STATUS_CONFIG[s].bg} border-current shadow-sm ring-1 ring-current/30`
-                  : "border-ink/10 bg-white hover:border-ink/20"
+                  : "border-ink/10 bg-white dark:bg-white/5 hover:border-ink/20"
               } ${STATUS_CONFIG[s].color}`}
             >
               <p className="text-2xl font-bold">{counts[s]}</p>
@@ -1445,10 +1445,10 @@ export default function Tracker() {
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink/30" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search company or role…"
-              className="w-full rounded-xl border border-ink/15 bg-white py-2.5 pl-10 pr-3 text-sm shadow-sm focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all" />
+              className="w-full rounded-xl border border-ink/15 bg-white dark:bg-white/5 py-2.5 pl-10 pr-3 text-sm shadow-sm focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all" />
           </div>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "all")}
-            className="rounded-xl border border-ink/15 bg-white px-3 py-2.5 text-sm text-ink/70 shadow-sm focus:border-moss focus:outline-none">
+            className="rounded-xl border border-ink/15 bg-white dark:bg-white/5 px-3 py-2.5 text-sm text-ink/70 shadow-sm focus:border-moss focus:outline-none">
             <option value="all">All statuses</option>
             {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
               <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
@@ -1456,7 +1456,7 @@ export default function Tracker() {
           </select>
           {(search || statusFilter !== "all") && (
             <button onClick={() => { setSearch(""); setStatusFilter("all"); }}
-              className="rounded-xl border border-ink/15 bg-white px-4 py-2.5 text-sm text-ink/50 hover:text-ink shadow-sm transition-colors">Clear</button>
+              className="rounded-xl border border-ink/15 bg-white dark:bg-white/5 px-4 py-2.5 text-sm text-ink/50 hover:text-ink shadow-sm transition-colors">Clear</button>
           )}
         </div>
       )}
@@ -1464,7 +1464,7 @@ export default function Tracker() {
       {loading ? (
         <ul className="space-y-3">
           {[0, 1, 2, 3].map((i) => (
-            <li key={i} className="animate-pulse rounded-xl border border-ink/10 bg-white/80 px-5 py-4 shadow-sm">
+            <li key={i} className="animate-pulse rounded-xl border border-ink/10 bg-white dark:bg-white/5 px-5 py-4 shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="h-9 w-9 shrink-0 rounded-full bg-ink/8" />
                 <div className="flex-1 space-y-2">
@@ -1486,7 +1486,7 @@ export default function Tracker() {
           <p className="mt-1 text-sm">Try a different search or status filter.</p>
         </div>
       ) : apps.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 bg-white/50 px-6 py-24 text-center">
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 bg-white dark:bg-white/5 px-6 py-24 text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-moss/10 text-moss">
             <Sparkles size={32} />
           </div>
