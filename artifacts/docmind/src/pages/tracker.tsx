@@ -840,9 +840,9 @@ function ApplicationRow({
       {expanded && (
         <div className="border-t border-ink/10 px-4 py-4 space-y-4">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ink/45">
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               <span>Status</span>
-              <select value={app.status} onChange={(e) => onStatusChange(app.id, e.target.value as ApplicationStatus)}
+              <select value={app.status} onChange={(e) => { e.stopPropagation(); onStatusChange(app.id, e.target.value as ApplicationStatus); }}
                 className="rounded-md border border-ink/15 bg-white px-2 py-1 text-sm text-ink/70">
                 {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
                   <option key={s} value={s}>{statusLabelWithDate(s, app)}</option>
@@ -850,12 +850,13 @@ function ApplicationRow({
               </select>
             </label>
             {app.jd_url && (
-              <a href={app.jd_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-signal hover:underline">
+              <a href={app.jd_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-signal hover:underline">
                 <ExternalLink size={12} /> Source JD
               </a>
             )}
             {showMarkAppliedCTA && (
-              <button onClick={handleMarkApplied}
+              <button onClick={(e) => { e.stopPropagation(); handleMarkApplied(); }}
                 className="ml-auto flex items-center gap-1.5 rounded-md bg-fern px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-fern/90 transition-colors">
                 <CheckCircle2 size={13} /> Mark as Applied
               </button>
@@ -1166,11 +1167,11 @@ export default function Tracker() {
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-xs font-medium text-ink/60">
-              <BackendStatusDot status={backendStatus} />
+              <BackendStatusDot status={backendStatus} apiUrl={API_URL ?? ""} />
               {processingCount > 0 ? (
                 <span className="text-signal animate-pulse">Processing {processingCount} app{processingCount !== 1 ? 's' : ''}...</span>
               ) : (
-                <span>System Ready</span>
+                <span>{backendStatus === "connected" ? "AI Ready" : backendStatus === "offline" ? "AI Offline" : "Connecting..."}</span>
               )}
             </div>
             <div className="h-6 w-px bg-ink/10"></div>
