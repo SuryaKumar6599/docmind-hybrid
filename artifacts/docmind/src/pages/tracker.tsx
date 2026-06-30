@@ -151,7 +151,7 @@ function Stage2Panel({ content }: { content: Stage2Content }) {
     <div className="space-y-4">
       {/* Cover letter opening */}
       {content.cover_letter_opening && (
-        <div className="rounded-md border border-ink/10 bg-white p-3">
+        <div className="rounded-xl border border-ink/10 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold text-ink/50 uppercase tracking-wide">Cover Letter Opening</p>
             <CopyButton text={content.cover_letter_opening} label="Copy paragraph" />
@@ -162,7 +162,7 @@ function Stage2Panel({ content }: { content: Stage2Content }) {
 
       {/* Tailored summary */}
       {content.tailored_summary && (
-        <div className="rounded-md border border-ink/10 bg-white p-3">
+        <div className="rounded-xl border border-ink/10 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold text-ink/50 uppercase tracking-wide">Tailored Summary</p>
             <CopyButton text={content.tailored_summary} label="Copy summary" />
@@ -179,7 +179,7 @@ function Stage2Panel({ content }: { content: Stage2Content }) {
           </p>
           <div className="space-y-2">
             {sorted.map((b, i) => (
-              <div key={i} className="grid grid-cols-2 gap-2 rounded-md border border-ink/10 bg-white p-3 text-xs">
+              <div key={i} className="grid grid-cols-2 gap-3 rounded-xl border border-ink/10 bg-white p-4 text-xs">
                 <div>
                   <p className="mb-1 font-medium text-ink/40">Original</p>
                   <p className="text-ink/60 leading-relaxed">{b.original}</p>
@@ -203,9 +203,9 @@ function Stage2Panel({ content }: { content: Stage2Content }) {
           <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">
             Skills to honestly claim
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {content.skills_to_add.map((s) => (
-              <span key={s} className="rounded-full bg-signal/10 px-2.5 py-0.5 text-xs font-medium text-signal">{s}</span>
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {content.skills_to_add?.map((s) => (
+              <span key={s} className="rounded-full bg-signal/10 px-2.5 py-1 text-[11px] font-semibold text-signal">{s}</span>
             ))}
           </div>
         </div>
@@ -343,7 +343,7 @@ function QuickSkillsPanel({
 
   function copyAllKeywords() {
     if (!result) return;
-    navigator.clipboard.writeText(result.missing_keywords.join(", ")).then(() => {
+    navigator.clipboard.writeText(result.missing_keywords?.join(", ")).then(() => {
       setCopiedKeywords(true);
       setTimeout(() => setCopiedKeywords(false), 2000);
     });
@@ -499,7 +499,7 @@ function QuickSkillsPanel({
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {result.missing_keywords.map((kw) => (
+                    {result.missing_keywords?.map((kw) => (
                       <span key={kw} className="rounded-full bg-amber/15 px-2.5 py-0.5 text-xs font-medium text-amber">{kw}</span>
                     ))}
                   </div>
@@ -512,7 +512,7 @@ function QuickSkillsPanel({
                     Matched skills ({result.matched_skills.length})
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {result.matched_skills.map((s) => (
+                    {result.matched_skills?.map((s) => (
                       <span key={s} className="rounded-full bg-fern/15 px-2.5 py-0.5 text-xs font-medium text-fern">{s}</span>
                     ))}
                   </div>
@@ -523,7 +523,7 @@ function QuickSkillsPanel({
                 <div>
                   <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">Strongest selling points</p>
                   <ul className="space-y-1">
-                    {result.core_highlights.map((h) => (
+                    {result.core_highlights?.map((h) => (
                       <li key={h} className="flex items-start gap-2 text-sm text-ink/70">
                         <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-fern" />{h}
                       </li>
@@ -539,7 +539,7 @@ function QuickSkillsPanel({
                     Skills to honestly claim (adjacent experience)
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {(result as any).skills_to_add.map((s: string) => (
+                    {(result as any).skills_to_add?.map((s: string) => (
                       <span key={s} className="rounded-full bg-signal/10 px-2.5 py-0.5 text-xs font-medium text-signal">{s}</span>
                     ))}
                   </div>
@@ -550,19 +550,19 @@ function QuickSkillsPanel({
                 <div>
                   <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">Suggested Skill-Gap Projects</p>
                   <div className="space-y-2">
-                    {result.recommended_projects.map((p) => (
+                    {result.recommended_projects?.map((p) => (
                       <div key={p.project_title} className="rounded-md border border-ink/10 bg-white p-3 text-sm">
                         <div className="flex items-start justify-between gap-4">
                           <p className="font-semibold text-ink">{p.project_title}</p>
                           <div className="flex flex-wrap justify-end gap-1 shrink-0">
-                            {p.skills_targeted.map(s => (
+                            {p.skills_targeted?.map(s => (
                               <span key={s} className="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-amber">{s}</span>
                             ))}
                           </div>
                         </div>
                         <p className="text-xs text-ink/60 mt-1.5 leading-relaxed">{p.one_line_description}</p>
                         <p className="mt-2 text-[11px] font-mono text-moss/80 bg-moss/5 rounded px-2 py-1 inline-block">
-                          {p.suggested_tech_stack.join(" · ")}
+                          {p.suggested_tech_stack?.join(" · ")}
                         </p>
                       </div>
                     ))}
@@ -686,7 +686,7 @@ function AddAppModal({
         </div>
         <div className="space-y-4 px-5 py-4">
           {ready.length === 0 && (
-            <p className="rounded-md bg-amber/10 px-3 py-2 text-sm text-amber">
+            <p className="rounded-xl bg-amber/10 px-4 py-3 text-sm text-amber shadow-sm">
               Upload a resume first (Resumes tab) and wait for it to be processed.
             </p>
           )}
@@ -696,7 +696,7 @@ function AddAppModal({
               {form.resume_id && <CheckCircle2 size={12} className="text-fern" />}
             </label>
             <select value={form.resume_id} onChange={(e) => setForm({ ...form, resume_id: e.target.value })}
-              className="w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm">
+              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none">
               {ready.map((r) => <option key={r.id} value={r.id}>{r.original_filename}</option>)}
             </select>
           </div>
@@ -706,18 +706,18 @@ function AddAppModal({
               <input value={form.company_name}
                 onChange={(e) => setForm({ ...form, company_name: e.target.value })}
                 onBlur={checkDuplicate}
-                className="w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm" placeholder="Acme Corp" />
+                className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="Acme Corp" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-ink/60">Role *</label>
               <input value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
                 onBlur={checkDuplicate}
-                className="w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm" placeholder="Senior Engineer" />
+                className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="Senior Engineer" />
             </div>
           </div>
           {dupWarning && (
-            <p className="rounded-md bg-amber/10 px-3 py-2 text-sm text-amber">⚠ {dupWarning}</p>
+            <p className="rounded-lg bg-amber/10 px-3 py-2 text-sm text-amber shadow-sm">⚠ {dupWarning}</p>
           )}
           <div>
             <label className="mb-1 flex items-center gap-2 text-xs font-medium text-ink/60">
@@ -725,7 +725,7 @@ function AddAppModal({
               {form.jd_url && !jdFile && <CheckCircle2 size={12} className="text-fern" />}
             </label>
             <input value={form.jd_url} onChange={(e) => setForm({ ...form, jd_url: e.target.value })}
-              className="w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm" placeholder="https://jobs.example.com/..." />
+              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm focus:border-moss focus:outline-none" placeholder="https://jobs.example.com/..." />
           </div>
           <div>
             <label className="mb-1 flex items-center gap-2 text-xs font-medium text-ink/60">
@@ -734,14 +734,14 @@ function AddAppModal({
             </label>
             <input type="file" accept=".pdf,.docx,.txt"
               onChange={(e) => setJdFile(e.target.files?.[0] ?? null)}
-              className="block w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm file:mr-2 file:rounded file:border-0 file:bg-moss file:px-2 file:py-1 file:text-xs file:font-semibold file:text-white" />
+              className="block w-full rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm shadow-sm file:mr-2 file:rounded file:border-0 file:bg-moss file:px-2 file:py-1 file:text-xs file:font-semibold file:text-white" />
           </div>
-          {err && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
+          {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 shadow-sm">{err}</p>}
         </div>
         <div className="flex justify-end gap-3 border-t border-ink/10 px-5 py-3">
-          <button onClick={onClose} className="rounded-md px-4 py-2 text-sm text-ink/60 hover:text-ink">Cancel</button>
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-ink/60 hover:text-ink hover:bg-ink/5 transition-colors">Cancel</button>
           <button onClick={submit} disabled={saving || ready.length === 0}
-            className="flex items-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-semibold text-white disabled:bg-ink/25">
+            className="flex items-center gap-2 rounded-lg bg-moss px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:bg-ink/25 transition-colors">
             {saving && <Loader2 className="animate-spin" size={14} />}
             {saving ? "Saving..." : "Add Application"}
           </button>
@@ -972,13 +972,13 @@ function ApplicationRow({
                 <div>
                   <div className="mb-1 flex items-center justify-between">
                     <p className="text-xs font-medium text-ink/50">Matched skills</p>
-                    {app.stage1_analysis.matched_skills.length > 0 && (
-                      <CopyButton text={app.stage1_analysis.matched_skills.join(", ")} label="" />
+                    {app.stage1_analysis.matched_skills?.length > 0 && (
+                      <CopyButton text={app.stage1_analysis.matched_skills?.join(", ")} label="" />
                     )}
                   </div>
-                  {app.stage1_analysis.matched_skills.length > 0 ? (
+                  {app.stage1_analysis.matched_skills?.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
-                      {app.stage1_analysis.matched_skills.map((s) => (
+                      {app.stage1_analysis.matched_skills?.map((s) => (
                         <span key={s} className="rounded-full bg-fern/15 px-2 py-0.5 text-xs text-fern">{s}</span>
                       ))}
                     </div>
@@ -991,13 +991,13 @@ function ApplicationRow({
                 <div>
                   <div className="mb-1 flex items-center justify-between">
                     <p className="text-xs font-medium text-ink/50">Missing keywords</p>
-                    {app.stage1_analysis.missing_keywords.length > 0 && (
-                      <CopyButton text={app.stage1_analysis.missing_keywords.join(", ")} label="" />
+                    {app.stage1_analysis.missing_keywords?.length > 0 && (
+                      <CopyButton text={app.stage1_analysis.missing_keywords?.join(", ")} label="" />
                     )}
                   </div>
-                  {app.stage1_analysis.missing_keywords.length > 0 ? (
+                  {app.stage1_analysis.missing_keywords?.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
-                      {app.stage1_analysis.missing_keywords.map((kw) => (
+                      {app.stage1_analysis.missing_keywords?.map((kw) => (
                         <span key={kw} className="rounded-full bg-amber/15 px-2 py-0.5 text-xs text-amber">{kw}</span>
                       ))}
                     </div>
@@ -1006,11 +1006,11 @@ function ApplicationRow({
                   )}
                 </div>
               </div>
-              {app.stage1_analysis.core_highlights.length > 0 && (
+              {app.stage1_analysis.core_highlights?.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-ink/50 mb-1">Strengths for this role</p>
                   <ul className="space-y-0.5">
-                    {app.stage1_analysis.core_highlights.map((h) => (
+                    {app.stage1_analysis.core_highlights?.map((h) => (
                       <li key={h} className="flex items-start gap-1.5 text-ink/70">
                         <CheckCircle2 className="mt-0.5 shrink-0 text-fern" size={12} />{h}
                       </li>
@@ -1022,19 +1022,19 @@ function ApplicationRow({
                 <div>
                   <p className="text-xs font-medium text-ink/50 mb-1 mt-2">Suggested Skill-Gap Projects</p>
                   <div className="space-y-2">
-                    {app.stage1_analysis.recommended_projects.map((p) => (
+                    {app.stage1_analysis.recommended_projects?.map((p) => (
                       <div key={p.project_title} className="rounded-md border border-ink/10 bg-white p-3 text-sm">
                         <div className="flex items-start justify-between gap-4">
                           <p className="font-semibold text-ink">{p.project_title}</p>
                           <div className="flex flex-wrap justify-end gap-1 shrink-0">
-                            {p.skills_targeted.map(s => (
+                            {p.skills_targeted?.map(s => (
                               <span key={s} className="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-amber">{s}</span>
                             ))}
                           </div>
                         </div>
                         <p className="text-xs text-ink/60 mt-1.5 leading-relaxed">{p.one_line_description}</p>
                         <p className="mt-2 text-[11px] font-mono text-moss/80 bg-moss/5 rounded px-2 py-1 inline-block">
-                          {p.suggested_tech_stack.join(" · ")}
+                          {p.suggested_tech_stack?.join(" · ")}
                         </p>
                       </div>
                     ))}
@@ -1080,13 +1080,13 @@ function ApplicationRow({
 
           {/* JD tab */}
           {activeTab === "jd" && (
-            <div className="rounded-md border border-ink/10 bg-paper p-3 text-sm">
+            <div className="rounded-xl border border-ink/10 bg-paper p-4 text-sm">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Saved Job Description</p>
                 {app.jd_content && <CopyButton text={app.jd_content} label="Copy JD" />}
               </div>
               {app.jd_content ? (
-                <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md bg-white p-3 font-mono text-xs leading-relaxed text-ink/70">
+                <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-xl border border-ink/5 bg-white p-4 font-mono text-xs leading-relaxed text-ink/70">
                   {app.jd_content}
                 </pre>
               ) : app.jd_url ? (
@@ -1099,13 +1099,13 @@ function ApplicationRow({
 
           {/* Notes tab */}
           {activeTab === "notes" && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add notes about this application — recruiter name, interview prep, salary range…"
-                className="w-full resize-y rounded-md border border-ink/15 bg-paper px-3 py-2 text-sm placeholder:text-ink/25 focus:border-moss focus:outline-none" />
-              <div className="flex items-center gap-3">
+                className="w-full resize-y rounded-xl border border-ink/15 bg-paper px-4 py-3 text-sm placeholder:text-ink/30 focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all shadow-sm" />
+              <div className="flex items-center gap-3 px-1">
                 <button onClick={saveNotes} disabled={notesSaving}
-                  className="flex items-center gap-1.5 rounded-md bg-ink/5 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/10 transition-colors disabled:opacity-50">
+                  className="flex items-center gap-1.5 rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/10 transition-colors disabled:opacity-50">
                   {notesSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
                   {notesSaving ? "Saving…" : "Save notes"}
                 </button>
@@ -1116,16 +1116,16 @@ function ApplicationRow({
 
           {/* Downloads */}
           {(app.docx_url || app.pdf_url) && (
-            <div className="flex gap-3 pt-1">
+            <div className="flex gap-2 pt-2 border-t border-ink/5 mt-4">
               {app.docx_url && (
                 <button type="button" onClick={handleDocxDownload} disabled={downloadingDocx}
-                  className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-50">
+                  className="flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-50 shadow-sm transition-colors">
                   {downloadingDocx ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Download DOCX
                 </button>
               )}
               {app.pdf_url && (
                 <a href={app.pdf_url}
-                  className="flex items-center gap-1.5 rounded-md bg-signal px-3 py-1.5 text-xs font-medium text-white">
+                  className="flex items-center gap-1.5 rounded-lg bg-signal px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-signal/90 transition-colors">
                   <Download size={13} /> Download PDF
                 </a>
               )}
@@ -1138,8 +1138,8 @@ function ApplicationRow({
 
           {/* Error */}
           {app.status === "error" && app.error_message && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
-              <XCircle className="mr-1 inline" size={12} />
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm mt-3">
+              <XCircle className="mr-1.5 inline -mt-0.5" size={14} />
               {app.error_message.slice(0, 300)}
             </div>
           )}
