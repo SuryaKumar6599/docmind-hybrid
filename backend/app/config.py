@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
@@ -12,20 +12,18 @@ load_dotenv()
 class Settings:
     supabase_url: str
     supabase_service_role_key: str
-    chat_provider: str = "ollama"  # "ollama"
-    embedding_provider: str = "ollama"  # "ollama"
+    chat_provider: str = "ollama"
     # Ollama settings
     ollama_base_url: str = "http://localhost:11434"
     ollama_chat_model: str = "qwen2.5:7b"
     ollama_vision_model: str = "qwen2.5vl:7b"
-    ollama_embed_model: str = "nomic-embed-text"
     # Heavier model reserved for Stage 2 (tailored content generation) only —
     # this is the quality-critical, creative task (first-person rewriting,
     # X-Y-Z bullets, fidelity to the source resume). Stage 1 (extraction/
-    # classification) and embeddings stay on the lighter model: ~17GB vs
-    # ~5GB, not worth the latency/resource cost everywhere.
+    # classification) stays on the lighter model: ~17GB vs ~5GB, not worth
+    # the latency/resource cost everywhere.
     ollama_premium_chat_model: str = "qwen3.6:27b"
-    
+
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
     # Token budget constants (8k context window)
     token_budget_system: int = 800
@@ -47,12 +45,10 @@ class Settings:
             supabase_url=os.getenv("SUPABASE_URL", ""),
             supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
             chat_provider=os.getenv("CHAT_PROVIDER", "ollama").lower(),
-            embedding_provider=os.getenv("EMBEDDING_PROVIDER", "ollama").lower(),
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
             ollama_chat_model=os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
             ollama_premium_chat_model=os.getenv("OLLAMA_PREMIUM_CHAT_MODEL", "qwen3.6:27b"),
             ollama_vision_model=os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b"),
-            ollama_embed_model=os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
             cors_origins=tuple(o.strip().rstrip("/") for o in origins.split(",") if o.strip()),
             token_budget_total=int(os.getenv("TOKEN_BUDGET_TOTAL", "8000")),
             worker_poll_interval_seconds=int(os.getenv("WORKER_POLL_INTERVAL", "10")),

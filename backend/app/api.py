@@ -2,12 +2,11 @@
 
 Endpoints:
   GET  /health              — service health + dependency status
+  GET  /health/full         — detailed: ollama, models, supabase, tunnel
   GET  /                    — API index
-  POST /index               — index a document into the vector store
-  POST /ask                 — semantic search + RAG answer
-  POST /extract-skills      — on-demand job-match gap analysis
   POST /convert             — convert any document to Markdown + XML (no storage)
-  POST /generate-tailored   — stage 2 creative rewrite (used by Intelligence UI)
+  POST /extract-skills      — on-demand job-match gap analysis
+  POST /generate-tailored   — stage 2 creative rewrite
   POST /export-docx         — render tailored resume as a .docx stream
 """
 from __future__ import annotations
@@ -29,22 +28,17 @@ import re
 import difflib
 
 from .config import Settings, get_settings
-from .document_processing import DocumentProcessor, chunk_text
-from .llm_gateway import BaseChatProvider, BaseEmbeddingProvider, get_chat_provider, get_embedding_provider
+from .document_processing import DocumentProcessor
+from .llm_gateway import BaseChatProvider, get_chat_provider
 from .markdown_to_xml import markdown_to_xml
 from .models import (
-    AskRequest,
-    AskResponse,
     HealthFullResponse,
     HealthResponse,
-    IndexResponse,
     OllamaHealth,
     SupabaseHealth,
     TunnelHealth,
 )
-from .rag import LocalRAG
 from .schemas import JobMatchAnalysis, TailoredContent
-from .supabase_store import SupabaseVectorStore
 from .docx_renderer import render_tailored_resume
 from .prompts import STAGE1_SYSTEM, STAGE2_SYSTEM, build_stage1_user_message, build_stage2_user_message
 
@@ -95,12 +89,6 @@ def _validate_size(data: bytes, settings: Settings, filename: str) -> None:
 
 def get_chat_provider_dep(settings: Settings = Depends(get_settings)) -> BaseChatProvider:
     return get_chat_provider(settings)
-
-def get_embedding_provider_dep(settings: Settings = Depends(get_settings)) -> BaseEmbeddingProvider:
-    return get_embedding_provider(settings)
-
-def get_store(settings: Settings = Depends(get_settings)) -> SupabaseVectorStore:
-    return SupabaseVectorStore(settings)
 
 def get_instructor_client(chat_provider: BaseChatProvider = Depends(get_chat_provider_dep)) -> instructor.Instructor:
     return chat_provider.get_instructor_client()
@@ -153,7 +141,7 @@ def _model_installed(wanted: str, installed: set[str]) -> bool:
 async def health_full(settings: Settings = Depends(get_settings)) -> HealthFullResponse:
     """Detailed status for the debug panel: Ollama + required models, Supabase, tunnel."""
     ollama_reachable = False
-    model_status = {"chat": False, "vision": False, "embed": False, "premium_chat": False}
+    model_status = {"chat": False, "vision": False, "premium_chat": False}
     try:
         resp = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=3)
         ollama_reachable = resp.ok
@@ -161,7 +149,6 @@ async def health_full(settings: Settings = Depends(get_settings)) -> HealthFullR
             installed = {m.get("name", "") for m in resp.json().get("models", [])}
             model_status["chat"] = _model_installed(settings.ollama_chat_model, installed)
             model_status["vision"] = _model_installed(settings.ollama_vision_model, installed)
-            model_status["embed"] = _model_installed(settings.ollama_embed_model, installed)
             model_status["premium_chat"] = _model_installed(settings.ollama_premium_chat_model, installed)
     except Exception as exc:
         logger.warning("Ollama health-check failed: %s", exc)
@@ -216,117 +203,12 @@ async def root() -> dict[str, object]:
         "endpoints": {
             "health":            "GET  /health",
             "health-full":       "GET  /health/full         detailed: ollama, models, supabase, tunnel",
-            "index":             "POST /index              multipart: file=<document>",
-            "ask":               "POST /ask                JSON: {question, match_count, category?}",
             "extract-skills":    "POST /extract-skills     JSON: {resume_text, jd_text}",
             "convert":           "POST /convert            multipart: file=<document>",
             "generate-tailored": "POST /generate-tailored  JSON: {resume_text, analysis, company, role}",
             "export-docx":       "POST /export-docx        JSON: {content, candidate_name, company, role} → .docx stream",
         },
     }
-
-
-# ---------------------------------------------------------------------------
-# Index (vector store)
-# ---------------------------------------------------------------------------
-
-@router.post("/index")
-async def index_document(
-    file: UploadFile = File(...),
-    category: str = Form("general"),
-    application_id: str | None = Form(None),
-    store: SupabaseVectorStore = Depends(get_store),
-    chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
-    embedding_provider: BaseEmbeddingProvider = Depends(get_embedding_provider_dep),
-    settings: Settings = Depends(get_settings),
-):
-    """Convert a document to Markdown, chunk it, embed chunks, and upsert into Supabase."""
-    filename = file.filename or "document"
-    _validate_extension(filename)
-    suffix = Path(filename).suffix.lower()
-    logger.info("Index request: %s (category=%s)", filename, category)
-
-    data = await file.read()
-    _validate_size(data, settings, filename)
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(data)
-        tmp_path = Path(tmp.name)
-
-    try:
-        processor = DocumentProcessor(chat_provider=chat_provider)
-        markdown = processor.convert_to_markdown(tmp_path)
-        chunks: list[str] = chunk_text(markdown)
-
-        if not chunks:
-            raise HTTPException(status_code=422, detail="Document produced no extractable text.")
-
-        # Create document record first, then embed + insert chunks in bulk.
-        metadata = {"source": filename, "char_count": len(markdown), "category": category}
-        if application_id:
-            metadata["application_id"] = application_id
-        document_id = store.create_document(
-            name=filename,
-            metadata=metadata,
-            category=category,
-        )
-        embeddings = [embedding_provider.embed(chunk) for chunk in chunks]
-        store.insert_chunks(
-            document_id=document_id,
-            chunks=chunks,
-            embeddings=embeddings,
-            metadata={"filename": filename, "category": category, **({"application_id": application_id} if application_id else {})},
-        )
-
-        logger.info("Indexed %d chunks for '%s' (doc_id=%s)", len(chunks), filename, document_id)
-        return {
-            "document_id": document_id,
-            "filename": filename,
-            "chunk_count": len(chunks),
-            "char_count": len(markdown),
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Index failed for '%s': %s", filename, exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-
-# ---------------------------------------------------------------------------
-# Ask / RAG
-# ---------------------------------------------------------------------------
-
-@router.post("/ask")
-async def ask_question(
-    body: AskRequest,
-    store: SupabaseVectorStore = Depends(get_store),
-    settings: Settings = Depends(get_settings),
-    chat_provider: BaseChatProvider = Depends(get_chat_provider_dep),
-    embedding_provider: BaseEmbeddingProvider = Depends(get_embedding_provider_dep),
-):
-    """Semantic search + streaming RAG answer over indexed documents."""
-    logger.info(
-        "Ask: question=%r | category=%s | k=%d",
-        body.question[:80], body.category, body.match_count,
-    )
-    try:
-        query_embedding = embedding_provider.embed(body.question)
-        sources = store.match_documents_hybrid(
-            query_text=body.question,
-            query_embedding=query_embedding,
-            match_count=body.match_count,
-            category=body.category
-        )
-        rag = LocalRAG(settings, chat_provider)
-        return StreamingResponse(
-            rag.answer_stream(body.question, sources),
-            media_type="application/x-ndjson"
-        )
-    except Exception as exc:
-        logger.error("Ask failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -337,9 +219,7 @@ def _reconcile_keyword_contradictions(analysis: JobMatchAnalysis, resume_text: s
     """Deterministic safety net: a keyword can never be both matched and
     missing. If something in missing_keywords is literally findable in the
     resume text (case-insensitive, whitespace-normalized), it isn't actually
-    missing -- move it to matched_skills. Catches cases like "Azure AI
-    Search" being flagged missing when it's right there in the resume,
-    even with good prompting an LLM can still slip on this occasionally."""
+    missing -- move it to matched_skills."""
     resume_normalized = re.sub(r"\s+", " ", resume_text).lower()
     still_missing: list[str] = []
     matched = list(analysis.matched_skills)
@@ -458,11 +338,9 @@ async def convert_document(
         processor = DocumentProcessor(chat_provider=chat_provider)
         markdown = processor.convert_to_markdown(tmp_path)
 
-        # Detect whether OCR was used (image file or scanned PDF fallback)
         is_image = suffix in {
             ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp"
         }
-        # If PDF produced output and starts with "<!-- Page" it went through OCR
         ocr_used = is_image or markdown.startswith("<!-- Page")
 
         logger.info(
@@ -502,13 +380,7 @@ _BULLET_PREFIX_RE = re.compile(r"^[-*•▪◦‣·]\s+|^\d+[.)]\s+")
 
 
 def _extract_summary_and_bullets(resume_text: str) -> tuple[str, list[str]]:
-    """Split resume Markdown into a rough summary + experience bullets.
-
-    Recognizes common bullet markers (-, *, •, ▪, ◦, ‣, ·) and numbered
-    lists (1. / 1)) — the original version only matched "- " and "* ",
-    which silently dropped any resume using a different marker, leaving
-    the model nothing real to quote in RewrittenBullet.original.
-    """
+    """Split resume Markdown into a rough summary + experience bullets."""
     summary_lines: list[str] = []
     bullet_lines: list[str] = []
     for line in resume_text.splitlines():
@@ -523,11 +395,7 @@ def _extract_summary_and_bullets(resume_text: str) -> tuple[str, list[str]]:
 
 def _log_bullet_fidelity(tailored: TailoredContent, source_bullets: list[str]) -> None:
     """Log a warning when a rewritten bullet's 'original' field doesn't
-    closely match anything actually extracted from the resume — signals
-    the model paraphrased/invented an "original" rather than quoting it.
-    Logging only (unlike the keyword reconciliation, there's no
-    deterministic way to know what the real original should have been),
-    but this gives concrete log signal to investigate."""
+    closely match anything actually extracted from the resume."""
     if not source_bullets:
         return
     for bullet in tailored.rewritten_bullets:
@@ -606,7 +474,6 @@ async def export_docx(body: ExportDocxRequest):
     logger.info("Export DOCX: candidate=%r, company=%r, role=%r",
                 body.candidate_name, body.company, body.role)
     try:
-        # Read bytes to memory inside tempdir scope so the dir can safely be cleaned up.
         with tempfile.TemporaryDirectory() as tmpdir:
             out_dir = Path(tmpdir)
             artifacts = render_tailored_resume(

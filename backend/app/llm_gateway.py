@@ -1,4 +1,4 @@
-"""LLM Gateway Pattern for decoupling Chat and Embedding providers."""
+"""LLM Gateway Pattern for decoupling Chat provider."""
 
 import base64
 import logging
@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import instructor
-import requests
 from openai import OpenAI
 
 from .config import Settings
@@ -15,7 +14,6 @@ from .config import Settings
 logger = logging.getLogger(__name__)
 
 _VISION_TIMEOUT = 180
-_EMBED_TIMEOUT = 120
 
 
 class BaseChatProvider(ABC):
@@ -33,15 +31,6 @@ class BaseChatProvider(ABC):
     @abstractmethod
     def vision(self, image_path: str) -> str:
         """Extract text from an image and return strictly as Markdown string."""
-        pass
-
-
-class BaseEmbeddingProvider(ABC):
-    def __init__(self, settings: Settings) -> None:
-        self.settings = settings
-
-    @abstractmethod
-    def embed(self, text: str) -> list[float]:
         pass
 
 
@@ -108,29 +97,8 @@ class OllamaChatProvider(BaseChatProvider):
             raise
 
 
-class OllamaEmbeddingProvider(BaseEmbeddingProvider):
-    def embed(self, text: str) -> list[float]:
-        if not text.strip():
-            raise ValueError("Cannot embed empty string")
-
-        logger.debug("Embedding %d chars via %s", len(text), self.settings.ollama_embed_model)
-        response = requests.post(
-            f"{self.settings.ollama_base_url}/api/embeddings",
-            json={"model": self.settings.ollama_embed_model, "prompt": text},
-            timeout=_EMBED_TIMEOUT,
-        )
-        response.raise_for_status()
-
-        embedding: list[float] = response.json()["embedding"]
-        if len(embedding) != 768:
-            raise RuntimeError(
-                f"Expected 768-dim embedding from {self.settings.ollama_embed_model}, got {len(embedding)}"
-            )
-        return embedding
-
-
 # ---------------------------------------------------------------------------
-# Factories
+# Factory
 # ---------------------------------------------------------------------------
 
 def get_chat_provider(settings: Settings) -> BaseChatProvider:
@@ -139,11 +107,3 @@ def get_chat_provider(settings: Settings) -> BaseChatProvider:
         return OllamaChatProvider(settings)
     else:
         raise ValueError(f"Unknown chat_provider: {provider_name}")
-
-
-def get_embedding_provider(settings: Settings) -> BaseEmbeddingProvider:
-    provider_name = settings.embedding_provider.lower()
-    if provider_name == "ollama":
-        return OllamaEmbeddingProvider(settings)
-    else:
-        raise ValueError(f"Unknown embedding_provider: {provider_name}")

@@ -117,7 +117,6 @@ function ResumeRow({
           </p>
           <p className="text-xs text-ink/50">
             {new Date(resume.created_at).toLocaleDateString()}
-            {resume.chunk_count != null && ` · ${resume.chunk_count} chunks`}
             {wordCount != null && ` · ${wordCount.toLocaleString()} words`}
           </p>
         </div>

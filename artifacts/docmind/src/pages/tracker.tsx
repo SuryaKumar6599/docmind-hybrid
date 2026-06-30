@@ -548,13 +548,22 @@ function QuickSkillsPanel({
 
               {result.recommended_projects.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">Portfolio to highlight</p>
+                  <p className="mb-2 text-xs font-semibold text-ink/50 uppercase tracking-wide">Suggested Skill-Gap Projects</p>
                   <div className="space-y-2">
                     {result.recommended_projects.map((p) => (
-                      <div key={p.project_name} className="rounded-md border border-ink/10 bg-white px-3 py-2 text-sm">
-                        <p className="font-medium text-ink">{p.project_name}</p>
-                        <p className="text-xs text-ink/50 mt-0.5">{p.relevance_reason}</p>
-                        <p className="mt-1 text-xs text-moss">→ {p.suggested_highlight}</p>
+                      <div key={p.project_title} className="rounded-md border border-ink/10 bg-white p-3 text-sm">
+                        <div className="flex items-start justify-between gap-4">
+                          <p className="font-semibold text-ink">{p.project_title}</p>
+                          <div className="flex flex-wrap justify-end gap-1 shrink-0">
+                            {p.skills_targeted.map(s => (
+                              <span key={s} className="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-amber">{s}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-xs text-ink/60 mt-1.5 leading-relaxed">{p.one_line_description}</p>
+                        <p className="mt-2 text-[11px] font-mono text-moss/80 bg-moss/5 rounded px-2 py-1 inline-block">
+                          {p.suggested_tech_stack.join(" · ")}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -580,7 +589,7 @@ function AddAppModal({
   resumes: Resume[];
   existingApps: JobApplication[];
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: (id: string) => void;
 }) {
   const [form, setForm] = useState({
     company_name: "",
@@ -644,7 +653,23 @@ function AddAppModal({
         application_date: new Date().toISOString().split("T")[0],
       });
       if (error) throw new Error(error.message);
-      onAdded(); onClose();
+      
+      const { data } = await supabase
+        .from("job_applications")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("company_name", form.company_name)
+        .eq("role", form.role)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+        
+      if (data) {
+        onAdded(data.id);
+      } else {
+        onAdded(""); // Fallback
+      }
+      onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to save");
     } finally {
@@ -666,7 +691,10 @@ function AddAppModal({
             </p>
           )}
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">Base Resume *</label>
+            <label className="mb-1 flex items-center gap-2 text-xs font-medium text-ink/60">
+              Base Resume *
+              {form.resume_id && <CheckCircle2 size={12} className="text-fern" />}
+            </label>
             <select value={form.resume_id} onChange={(e) => setForm({ ...form, resume_id: e.target.value })}
               className="w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm">
               {ready.map((r) => <option key={r.id} value={r.id}>{r.original_filename}</option>)}
@@ -692,13 +720,17 @@ function AddAppModal({
             <p className="rounded-md bg-amber/10 px-3 py-2 text-sm text-amber">⚠ {dupWarning}</p>
           )}
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">JD URL (optional)</label>
+            <label className="mb-1 flex items-center gap-2 text-xs font-medium text-ink/60">
+              JD URL (optional)
+              {form.jd_url && !jdFile && <CheckCircle2 size={12} className="text-fern" />}
+            </label>
             <input value={form.jd_url} onChange={(e) => setForm({ ...form, jd_url: e.target.value })}
               className="w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm" placeholder="https://jobs.example.com/..." />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/60">
+            <label className="mb-1 flex items-center gap-2 text-xs font-medium text-ink/60">
               Upload JD file (PDF/DOCX) — triggers AI tailoring
+              {jdFile && <CheckCircle2 size={12} className="text-fern" />}
             </label>
             <input type="file" accept=".pdf,.docx,.txt"
               onChange={(e) => setJdFile(e.target.files?.[0] ?? null)}
@@ -737,6 +769,7 @@ function ApplicationRow({
   const [notes, setNotes] = useState(app.notes ?? "");
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
+  const [showAppliedToast, setShowAppliedToast] = useState(false);
   const [downloadingDocx, setDownloadingDocx] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"analysis" | "tailored" | "jd" | "notes">("analysis");
@@ -763,6 +796,13 @@ function ApplicationRow({
   }
   const currentStatusDate = app.status_dates?.[app.status];
   const isProcessing = PIPELINE_STATUSES.includes(app.status) && app.status !== "ready";
+  const showMarkAppliedCTA = app.status === "ready" || app.status === "stage1_complete";
+
+  function handleMarkApplied() {
+    onStatusChange(app.id, "applied");
+    setShowAppliedToast(true);
+    setTimeout(() => setShowAppliedToast(false), 3000);
+  }
 
   async function saveNotes() {
     setNotesSaving(true);
@@ -814,6 +854,18 @@ function ApplicationRow({
                 <ExternalLink size={12} /> Source JD
               </a>
             )}
+            {showMarkAppliedCTA && (
+              <button onClick={handleMarkApplied}
+                className="ml-auto flex items-center gap-1.5 rounded-md bg-fern px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-fern/90 transition-colors">
+                <CheckCircle2 size={13} /> Mark as Applied
+              </button>
+            )}
+            {showAppliedToast && (
+              <div className="ml-auto flex items-center gap-1.5 rounded-md bg-fern/10 px-3 py-1.5 text-xs font-medium text-fern animate-in fade-in zoom-in duration-200">
+                <CheckCircle2 size={13} /> Marked applied!
+              </div>
+            )}
+            <div className="basis-full h-0"></div>
             {statusTimeline.length > 0 && (
               <span className="basis-full text-[11px] text-ink/35">
                 {statusTimeline.map(({ status, date }) => `${STATUS_CONFIG[status].label}: ${formatStatusDate(date)}`).join(" · ")}
@@ -826,7 +878,7 @@ function ApplicationRow({
             <div className="flex gap-1 rounded-lg border border-ink/10 bg-ink/3 p-1">
               {[
                 { id: "analysis" as const, label: "AI Analysis", show: Boolean(app.stage1_analysis) },
-                { id: "tailored" as const, label: "Tailored Content", show: Boolean(app.stage2_content) },
+                { id: "tailored" as const, label: "Tailored Content", show: Boolean(app.stage2_content) || isProcessing },
                 { id: "jd" as const, label: "Job Description", show: Boolean(app.jd_content || app.jd_url) },
                 { id: "notes" as const, label: "Notes", show: true },
               ].filter((t) => t.show).map((t) => (
@@ -855,29 +907,45 @@ function ApplicationRow({
                   <p className="text-ink/70 italic text-xs leading-relaxed">"{app.stage1_analysis.one_line_pitch}"</p>
                 </div>
               </div>
-              {app.stage1_analysis.missing_keywords.length > 0 && (
+              <div className="grid grid-cols-2 gap-4">
+                {/* Matched Skills */}
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-xs font-medium text-ink/50">Matched skills</p>
+                    {app.stage1_analysis.matched_skills.length > 0 && (
+                      <CopyButton text={app.stage1_analysis.matched_skills.join(", ")} label="" />
+                    )}
+                  </div>
+                  {app.stage1_analysis.matched_skills.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {app.stage1_analysis.matched_skills.map((s) => (
+                        <span key={s} className="rounded-full bg-fern/15 px-2 py-0.5 text-xs text-fern">{s}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-ink/30 italic">None matched</p>
+                  )}
+                </div>
+
+                {/* Missing Keywords */}
                 <div>
                   <div className="mb-1 flex items-center justify-between">
                     <p className="text-xs font-medium text-ink/50">Missing keywords</p>
-                    <CopyButton text={app.stage1_analysis.missing_keywords.join(", ")} label="Copy all" />
+                    {app.stage1_analysis.missing_keywords.length > 0 && (
+                      <CopyButton text={app.stage1_analysis.missing_keywords.join(", ")} label="" />
+                    )}
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {app.stage1_analysis.missing_keywords.map((kw) => (
-                      <span key={kw} className="rounded-full bg-amber/15 px-2 py-0.5 text-xs text-amber">{kw}</span>
-                    ))}
-                  </div>
+                  {app.stage1_analysis.missing_keywords.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {app.stage1_analysis.missing_keywords.map((kw) => (
+                        <span key={kw} className="rounded-full bg-amber/15 px-2 py-0.5 text-xs text-amber">{kw}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-ink/30 italic">None missing</p>
+                  )}
                 </div>
-              )}
-              {app.stage1_analysis.matched_skills.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-ink/50 mb-1">Matched skills</p>
-                  <div className="flex flex-wrap gap-1">
-                    {app.stage1_analysis.matched_skills.map((s) => (
-                      <span key={s} className="rounded-full bg-fern/15 px-2 py-0.5 text-xs text-fern">{s}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
+              </div>
               {app.stage1_analysis.core_highlights.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-ink/50 mb-1">Strengths for this role</p>
@@ -890,6 +958,29 @@ function ApplicationRow({
                   </ul>
                 </div>
               )}
+              {app.stage1_analysis.recommended_projects?.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-ink/50 mb-1 mt-2">Suggested Skill-Gap Projects</p>
+                  <div className="space-y-2">
+                    {app.stage1_analysis.recommended_projects.map((p) => (
+                      <div key={p.project_title} className="rounded-md border border-ink/10 bg-white p-3 text-sm">
+                        <div className="flex items-start justify-between gap-4">
+                          <p className="font-semibold text-ink">{p.project_title}</p>
+                          <div className="flex flex-wrap justify-end gap-1 shrink-0">
+                            {p.skills_targeted.map(s => (
+                              <span key={s} className="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-amber">{s}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-xs text-ink/60 mt-1.5 leading-relaxed">{p.one_line_description}</p>
+                        <p className="mt-2 text-[11px] font-mono text-moss/80 bg-moss/5 rounded px-2 py-1 inline-block">
+                          {p.suggested_tech_stack.join(" · ")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -897,7 +988,31 @@ function ApplicationRow({
           {activeTab === "tailored" && app.stage2_content && (
             <Stage2Panel content={app.stage2_content} />
           )}
-          {activeTab === "tailored" && !app.stage2_content && (
+          {activeTab === "tailored" && !app.stage2_content && isProcessing && (
+            <div className="space-y-4 animate-pulse">
+              <div className="rounded-md border border-ink/10 bg-white p-3">
+                <div className="mb-3 h-3 w-32 rounded bg-ink/10" />
+                <div className="space-y-2">
+                  <div className="h-2.5 w-full rounded bg-ink/5" />
+                  <div className="h-2.5 w-5/6 rounded bg-ink/5" />
+                  <div className="h-2.5 w-4/5 rounded bg-ink/5" />
+                </div>
+              </div>
+              <div className="rounded-md border border-ink/10 bg-white p-3">
+                <div className="mb-3 h-3 w-28 rounded bg-ink/10" />
+                <div className="space-y-2">
+                  <div className="h-2.5 w-full rounded bg-ink/5" />
+                  <div className="h-2.5 w-11/12 rounded bg-ink/5" />
+                  <div className="h-2.5 w-3/4 rounded bg-ink/5" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md border border-ink/10 bg-white p-3 h-24" />
+                <div className="rounded-md border border-ink/10 bg-white p-3 h-24" />
+              </div>
+            </div>
+          )}
+          {activeTab === "tailored" && !app.stage2_content && !isProcessing && (
             <p className="rounded-md bg-ink/5 px-4 py-6 text-center text-sm text-ink/40">
               Stage 2 tailoring hasn't run yet — upload a JD file to trigger the full pipeline.
             </p>
@@ -984,6 +1099,9 @@ export default function Tracker() {
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
+  const [highlightedId, setHighlightedId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get("application_id")
+  );
   const { apiUrl: API_URL, status: backendStatus } = useBackendStatus();
 
   useEffect(() => {
@@ -1034,26 +1152,54 @@ export default function Tracker() {
     (acc, s) => ({ ...acc, [s]: apps.filter((a) => a.status === s).length }),
     {} as Record<ApplicationStatus, number>
   );
-  const highlightedApplicationId = new URLSearchParams(window.location.search).get("application_id");
+
+  const inProgressCount = PIPELINE_STATUSES.reduce((sum, s) => sum + counts[s], 0) + counts.interview;
+  const completedCount = counts.applied + counts.rejected + counts.closed;
+  const processingCount = counts.pending_processing + counts.processing;
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <header className="mb-6 flex items-center justify-between border-b border-ink/10 pb-5">
-        <div>
-          <p className="text-sm font-semibold text-moss">DocMind</p>
-          <h1 className="mt-1 text-3xl font-semibold text-ink">Application Tracker</h1>
+      <header className="mb-6 border-b border-ink/10 pb-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-moss">DocMind</p>
+            <h1 className="mt-1 text-3xl font-semibold text-ink">Application Tracker</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-ink/60">
+              <BackendStatusDot status={backendStatus} />
+              {processingCount > 0 ? (
+                <span className="text-signal animate-pulse">Processing {processingCount} app{processingCount !== 1 ? 's' : ''}...</span>
+              ) : (
+                <span>System Ready</span>
+              )}
+            </div>
+            <div className="h-6 w-px bg-ink/10"></div>
+            <div className="flex items-center gap-2">
+              {apps.length > 0 && (
+                <button onClick={() => exportToCSV(apps)}
+                  className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-2 text-sm text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors">
+                  <Download size={14} /> Export CSV
+                </button>
+              )}
+              <button onClick={() => setShowModal(true)} disabled={!isSupabaseConfigured}
+                className="flex items-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-semibold text-white disabled:bg-ink/25">
+                <PlusCircle size={16} /> Add Application
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {apps.length > 0 && (
-            <button onClick={() => exportToCSV(apps)}
-              className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-2 text-sm text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors">
-              <Download size={14} /> Export CSV
-            </button>
-          )}
-          <button onClick={() => setShowModal(true)} disabled={!isSupabaseConfigured}
-            className="flex items-center gap-2 rounded-md bg-moss px-4 py-2 text-sm font-semibold text-white disabled:bg-ink/25">
-            <PlusCircle size={16} /> Add Application
-          </button>
-        </div>
+        {apps.length > 0 && (
+          <div className="mt-6 flex gap-6 text-sm">
+            <div className="flex flex-col">
+              <span className="text-ink/50">In Progress</span>
+              <span className="text-xl font-bold text-ink">{inProgressCount}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-ink/50">Completed</span>
+              <span className="text-xl font-bold text-ink">{completedCount}</span>
+            </div>
+          </div>
+        )}
       </header>
 
       {!isSupabaseConfigured && (
@@ -1138,10 +1284,18 @@ export default function Tracker() {
           <p className="mt-1 text-sm">Try a different search or status filter.</p>
         </div>
       ) : apps.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center text-ink/40">
-          <Briefcase size={40} className="mb-3" />
-          <p className="text-lg">No applications yet.</p>
-          <p className="mt-1 text-sm">Add your first application to start tracking.</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 bg-white/50 px-6 py-24 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-moss/10 text-moss">
+            <Sparkles size={32} />
+          </div>
+          <h2 className="text-xl font-semibold text-ink">Let's get started</h2>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-ink/60">
+            Track your job hunt, get AI-tailored resumes, and discover skill-gap project ideas. Add your first application to begin.
+          </p>
+          <button onClick={() => setShowModal(true)} disabled={!isSupabaseConfigured}
+            className="mt-6 flex items-center gap-2 rounded-md bg-moss px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-105 disabled:opacity-50 disabled:hover:scale-100">
+            <PlusCircle size={16} /> Add Your First Application
+          </button>
         </div>
       ) : (
         <ul className="space-y-3">
@@ -1151,7 +1305,7 @@ export default function Tracker() {
               app={app}
               onStatusChange={updateStatus}
               onNotesSave={saveNotes}
-              highlighted={app.id === highlightedApplicationId}
+              highlighted={app.id === highlightedId}
             />
           ))}
         </ul>
@@ -1168,7 +1322,10 @@ export default function Tracker() {
           resumes={resumes}
           existingApps={apps}
           onClose={() => setShowModal(false)}
-          onAdded={fetchAll}
+          onAdded={(id) => {
+            fetchAll();
+            if (id) setHighlightedId(id);
+          }}
         />
       )}
     </div>

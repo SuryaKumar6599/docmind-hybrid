@@ -1,13 +1,14 @@
-"""Resume Service — Handles Resume Analysis and Tailoring."""
+"""Resume Service — Handles Resume Tailoring (Stages 1 + 2 + DOCX)."""
 from __future__ import annotations
 
 import datetime as dt
+import difflib
 import logging
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
 from supabase import Client
 
 from ..cleaner import clean_markdown
@@ -15,7 +16,7 @@ from ..config import Settings
 from ..context_manager import allocate_budget
 from ..document_processing import DocumentProcessor
 from ..docx_renderer import render_tailored_resume
-from ..llm_gateway import BaseChatProvider, BaseEmbeddingProvider
+from ..llm_gateway import BaseChatProvider
 from ..prompts import (
     STAGE1_SYSTEM,
     STAGE2_SYSTEM,
@@ -26,22 +27,14 @@ from ..schemas import JobMatchAnalysis, TailoredContent
 
 logger = logging.getLogger(__name__)
 
+# Recognises all common bullet marker styles used in resume Markdown.
+_BULLET_PREFIX_RE = re.compile(r"^[-*•▪◦‣·]\s+|^\d+[.)]\s+")
+
 
 def _with_status_date(row: dict[str, Any], status: str) -> dict[str, str]:
     dates = dict(row.get("status_dates") or {})
     dates[status] = dt.date.today().isoformat()
     return dates
-
-
-# ---------------------------------------------------------------------------
-# Strict Resume Analysis Output Schema (Instructor-enforced)
-# ---------------------------------------------------------------------------
-
-class ResumeAnalysis(BaseModel):
-    match_score: float = Field(..., description="Overall alignment score from 0 to 100")
-    missing_skills: list[str] = Field(..., description="Key skills required by JD but missing from resume")
-    strong_skills: list[str] = Field(..., description="Key skills present in both JD and resume")
-    ats_recommendations: list[str] = Field(..., description="Actionable recommendations to improve ATS pass rate")
 
 
 def _download_from_supabase(
@@ -67,14 +60,49 @@ def _upload_to_supabase(
     return url
 
 
+def _extract_summary_and_bullets(resume_text: str) -> tuple[str, list[str]]:
+    """Split resume Markdown into a rough summary + experience bullets.
+
+    Recognises all common bullet markers (-, *, •, ▪, ◦, ‣, ·) and
+    numbered lists (1. / 1)) to avoid silently dropping bullets that use
+    a marker other than '- ' or '* '.
+    """
+    summary_lines: list[str] = []
+    bullet_lines: list[str] = []
+    for line in resume_text.splitlines():
+        stripped = line.strip()
+        bullet_match = _BULLET_PREFIX_RE.match(stripped)
+        if bullet_match:
+            bullet_lines.append(stripped[bullet_match.end():].strip())
+        elif stripped and not stripped.startswith("#") and len(summary_lines) < 5:
+            summary_lines.append(stripped)
+    return " ".join(summary_lines[:3]), bullet_lines[:20]
+
+
+def _log_bullet_fidelity(tailored: TailoredContent, source_bullets: list[str]) -> None:
+    """Warn when a rewritten bullet's 'original' field doesn't closely match
+    anything extracted from the resume — signals model paraphrase/invention."""
+    if not source_bullets:
+        return
+    for bullet in tailored.rewritten_bullets:
+        best_ratio = max(
+            difflib.SequenceMatcher(None, bullet.original.lower(), src.lower()).ratio()
+            for src in source_bullets
+        )
+        if best_ratio < 0.5:
+            logger.warning(
+                "Low-fidelity 'original' bullet (best match %.0f%% vs resume): %r",
+                best_ratio * 100, bullet.original[:80],
+            )
+
+
 def process_tailoring(
     supa: Client,
     settings: Settings,
     chat_provider: BaseChatProvider,
-    embedding_provider: BaseEmbeddingProvider,
     row: dict[str, Any],
 ) -> None:
-    """Run the full 3-stage tailoring pipeline for a job application."""
+    """Run the full 2-stage tailoring pipeline for a job application."""
     app_id: str = row["id"]
     user_id: str = row["user_id"]
     jd_storage_path: str = row["jd_storage_path"]
@@ -111,21 +139,19 @@ def process_tailoring(
 
         instructor_client = chat_provider.get_instructor_client()
 
-        # --- Stage 1: Analytical gap analysis ---
+        # --- Stage 1: Analytical gap analysis (lightweight model) ---
         logger.info("[APP %s] Stage 1: Gap analysis", app_id)
-        stage1_messages = [
-            {"role": "system", "content": STAGE1_SYSTEM},
-            {"role": "user", "content": build_stage1_user_message(
-                budgeted.jd, budgeted.resume, company, role
-            )},
-        ]
-        
         analysis: JobMatchAnalysis = instructor_client.chat.completions.create(
             model=settings.ollama_chat_model,
-            messages=stage1_messages,
+            messages=[
+                {"role": "system", "content": STAGE1_SYSTEM},
+                {"role": "user", "content": build_stage1_user_message(
+                    budgeted.jd, budgeted.resume, company, role
+                )},
+            ],
             response_model=JobMatchAnalysis,
             max_retries=3,
-            temperature=0.0,
+            temperature=0.1,
         )
         logger.info("[APP %s] Stage 1 complete — match_score=%d", app_id, analysis.match_score)
 
@@ -138,35 +164,23 @@ def process_tailoring(
             "status_dates": row["status_dates"],
         }).eq("id", app_id).execute()
 
-        # --- Stage 2: Creative rewrite ---
+        # --- Stage 2: Creative rewrite (premium model) ---
         logger.info("[APP %s] Stage 2: Rewriting resume content", app_id)
-        # Extract first summary paragraph and bullets from resume markdown
-        lines = resume_md.splitlines()
-        summary_lines: list[str] = []
-        bullet_lines: list[str] = []
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith("- ") or stripped.startswith("* "):
-                bullet_lines.append(stripped.lstrip("- *").strip())
-            elif stripped and not stripped.startswith("#") and len(summary_lines) < 5:
-                summary_lines.append(stripped)
+        original_summary, experience_bullets = _extract_summary_and_bullets(resume_md)
 
-        original_summary = " ".join(summary_lines[:3])
-        experience_bullets = bullet_lines[:20]  # cap to avoid token overflow
-
-        stage2_messages = [
-            {"role": "system", "content": STAGE2_SYSTEM},
-            {"role": "user", "content": build_stage2_user_message(
-                original_summary, experience_bullets, analysis, company, role
-            )},
-        ]
         tailored: TailoredContent = instructor_client.chat.completions.create(
-            model=settings.ollama_chat_model,
-            messages=stage2_messages,
+            model=settings.ollama_premium_chat_model,
+            messages=[
+                {"role": "system", "content": STAGE2_SYSTEM},
+                {"role": "user", "content": build_stage2_user_message(
+                    original_summary, experience_bullets, analysis, company, role
+                )},
+            ],
             response_model=TailoredContent,
             max_retries=3,
             temperature=0.3,
         )
+        _log_bullet_fidelity(tailored, experience_bullets)
         logger.info("[APP %s] Stage 2 complete", app_id)
 
         # --- Stage 3: Pure-Python document generation (NO LLM) ---
@@ -180,7 +194,6 @@ def process_tailoring(
             output_dir=output_dir,
         )
 
-        # Upload artifacts to Supabase Storage
         docx_url: str | None = None
         pdf_url: str | None = None
 

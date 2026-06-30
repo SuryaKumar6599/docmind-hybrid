@@ -6,8 +6,6 @@ retries automatically on validation failure.
 """
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 
@@ -16,14 +14,35 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class ProjectRecommendation(BaseModel):
-    """A specific project from the resume recommended for this JD."""
+    """An AI-suggested new project idea that would demonstrably fill skill gaps."""
 
-    project_name: str = Field(description="Exact project title from the resume")
-    relevance_reason: str = Field(
-        description="One sentence explaining why this project aligns with the JD"
+    project_title: str = Field(
+        description=(
+            "A specific, buildable project title (e.g. 'Build a Redis-backed distributed rate limiter'). "
+            "Must be concrete enough to start in under two weeks."
+        )
     )
-    suggested_highlight: str = Field(
-        description="The single bullet point from this project to emphasize"
+    skills_targeted: list[str] = Field(
+        description=(
+            "The subset of missing_keywords this project directly addresses. "
+            "Must reference exact strings from missing_keywords."
+        ),
+        min_length=1,
+        max_length=5,
+    )
+    one_line_description: str = Field(
+        description=(
+            "One sentence: what the project demonstrates and why it closes the gap "
+            "(e.g. 'Demonstrates production-grade MLOps by containerising a model-serving API with CI/CD')."
+        )
+    )
+    suggested_tech_stack: list[str] = Field(
+        description=(
+            "Concrete technologies to use (e.g. ['Python', 'FastAPI', 'Redis', 'Docker']). "
+            "Must include at least one technology from missing_keywords."
+        ),
+        min_length=1,
+        max_length=6,
     )
 
 
@@ -52,7 +71,11 @@ class JobMatchAnalysis(BaseModel):
         le=100,
     )
     recommended_projects: list[ProjectRecommendation] = Field(
-        description="Up to 3 portfolio projects that best demonstrate fit for this role",
+        description=(
+            "2–3 specific, buildable project ideas the candidate should create to fill the most "
+            "critical missing_keywords. These are hypothetical new projects — not existing portfolio "
+            "items. Each must target real skills from missing_keywords and be achievable in 1–2 weeks."
+        ),
         max_length=3,
     )
     core_highlights: list[str] = Field(

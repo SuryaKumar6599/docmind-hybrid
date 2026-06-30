@@ -60,8 +60,6 @@ export interface Resume {
   original_filename: string;
   storage_path: string;
   status: ResumeStatus;
-  document_id: string | null;
-  chunk_count: number | null;
   markdown_content: string | null;
   parent_resume_id: string | null;
   error_message: string | null;
@@ -75,9 +73,10 @@ export interface Stage1Analysis {
   matched_skills: string[];
   match_score: number;
   recommended_projects: Array<{
-    project_name: string;
-    relevance_reason: string;
-    suggested_highlight: string;
+    project_title: string;
+    skills_targeted: string[];
+    one_line_description: string;
+    suggested_tech_stack: string[];
   }>;
   core_highlights: string[];
   one_line_pitch: string;
@@ -87,7 +86,6 @@ export interface RewrittenBullet {
   original: string;
   rewritten: string;
   priority: number;
-  is_github_injection?: boolean;
 }
 
 
