@@ -50,7 +50,7 @@ class OllamaChatProvider(BaseChatProvider):
         return self.client
 
     def get_instructor_client(self) -> Any:
-        return instructor.from_openai(self.client, mode=instructor.Mode.JSON)
+        return instructor.from_openai(self.client, mode=instructor.Mode.JSON_SCHEMA)
 
     def vision(self, image_path: str) -> str:
         image_bytes = Path(image_path).read_bytes()
