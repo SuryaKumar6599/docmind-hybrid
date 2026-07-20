@@ -101,17 +101,29 @@ def get_instructor_client(chat_provider: BaseChatProvider = Depends(get_chat_pro
 
 @router.get("/health", response_model=HealthResponse)
 async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
-    """Return service status. Pings Ollama to verify connectivity."""
-    ollama_ok = False
-    try:
-        resp = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=3)
-        ollama_ok = resp.ok
-    except Exception as exc:
-        logger.warning("Ollama health-check failed: %s", exc)
+    """Return service status. Pings the active LLM provider to verify connectivity."""
+    provider_ok = False
+    if settings.chat_provider == "llamacpp":
+        try:
+            resp = requests.get(
+                f"http://{settings.llamacpp_host}:{settings.llamacpp_port}/v1/models",
+                timeout=3,
+            )
+            provider_ok = resp.ok
+        except Exception as exc:
+            logger.warning("llama-cpp-python health-check failed: %s", exc)
+        runtime = "local-fastapi-llamacpp-v1"
+    else:
+        try:
+            resp = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=3)
+            provider_ok = resp.ok
+        except Exception as exc:
+            logger.warning("Ollama health-check failed: %s", exc)
+        runtime = "local-fastapi-ollama-v2"
 
-    status = "ok" if ollama_ok else "degraded"
-    logger.info("/health → %s (ollama=%s)", status, ollama_ok)
-    return HealthResponse(status=status, runtime="local-fastapi-ollama-v2")
+    status = "ok" if provider_ok else "degraded"
+    logger.info("/health -> %s (provider=%s ok=%s)", status, settings.chat_provider, provider_ok)
+    return HealthResponse(status=status, runtime=runtime)
 
 
 _TUNNEL_URL_PATTERN = re.compile(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com")
@@ -141,6 +153,59 @@ def _model_installed(wanted: str, installed: set[str]) -> bool:
 @router.get("/health/full", response_model=HealthFullResponse)
 async def health_full(settings: Settings = Depends(get_settings)) -> HealthFullResponse:
     """Detailed status for the debug panel: Ollama + required models, Supabase, tunnel."""
+    if settings.chat_provider == "llamacpp":
+        llamacpp_reachable = False
+        try:
+            resp = requests.get(
+                f"http://{settings.llamacpp_host}:{settings.llamacpp_port}/v1/models",
+                timeout=3,
+            )
+            llamacpp_reachable = resp.ok
+            if resp.ok:
+                served = {m.get("id", "") for m in resp.json().get("data", [])}
+                model_status["chat"] = bool(served)  # server is up = model loaded
+                model_status["vision"] = bool(settings.llamacpp_vision_model_path)
+                model_status["premium_chat"] = bool(settings.llamacpp_premium_model_path)
+        except Exception as exc:
+            logger.warning("llama-cpp-python health-check failed: %s", exc)
+
+        models_ok = model_status["chat"]
+        supabase_configured = bool(settings.supabase_url and settings.supabase_service_role_key)
+        supabase_reachable = False
+        if supabase_configured:
+            try:
+                resp = requests.get(
+                    f"{settings.supabase_url}/auth/v1/health",
+                    headers={"apikey": settings.supabase_service_role_key},
+                    timeout=3,
+                )
+                supabase_reachable = resp.ok
+            except Exception as exc:
+                logger.warning("Supabase health-check failed: %s", exc)
+
+        tunnel_url = _latest_tunnel_url()
+        if llamacpp_reachable and models_ok and supabase_reachable:
+            overall = "ok"
+        elif not llamacpp_reachable and not supabase_reachable:
+            overall = "down"
+        else:
+            overall = "degraded"
+
+        logger.info(
+            "/health/full -> %s (llamacpp=%s models=%s supabase=%s tunnel=%s)",
+            overall, llamacpp_reachable, model_status, supabase_reachable, tunnel_url is not None,
+        )
+        return HealthFullResponse(
+            status=overall,
+            runtime="local-fastapi-llamacpp-v1",
+            checked_at=dt.datetime.now(dt.timezone.utc).isoformat(),
+            fastapi=True,
+            ollama=OllamaHealth(reachable=llamacpp_reachable, models=model_status),
+            supabase=SupabaseHealth(configured=supabase_configured, reachable=supabase_reachable),
+            tunnel=TunnelHealth(known=tunnel_url is not None, url=tunnel_url),
+        )
+
+    # --- Ollama path (default) ---
     ollama_reachable = False
     model_status = {"chat": False, "vision": False, "premium_chat": False}
     try:
@@ -296,7 +361,7 @@ async def extract_skills(
 
     try:
         result: JobMatchAnalysis = client.chat.completions.create(
-            model=settings.ollama_chat_model,
+            model=settings.active_chat_model,
             response_model=JobMatchAnalysis,
             max_retries=3,
             messages=[
@@ -304,6 +369,9 @@ async def extract_skills(
                 {"role": "user", "content": user_message},
             ],
             temperature=0.1,
+            # Suppress Qwen3 chain-of-thought (<think> tags corrupt JSON_SCHEMA parsing).
+            # Ollama: sets think=false server-side. Ignored by Qwen2.5 and llama.cpp.
+            extra_body={"options": {"think": False}},
         )
         result = _reconcile_keyword_contradictions(result, body.resume_text)
         logger.info("Skills extraction complete: match_score=%d", result.match_score)
@@ -463,11 +531,14 @@ async def generate_tailored(
 
     try:
         tailored: TailoredContent = client.chat.completions.create(
-            model=settings.ollama_premium_chat_model,
+            model=settings.active_premium_chat_model,
             messages=stage2_messages,
             response_model=TailoredContent,
             max_retries=3,
             temperature=0.3,
+            # Suppress Qwen3 chain-of-thought (<think> tags corrupt JSON_SCHEMA parsing).
+            # Ollama: sets think=false server-side. Ignored by Qwen2.5 and llama.cpp.
+            extra_body={"options": {"think": False}},
         )
         _log_bullet_fidelity(tailored, experience_bullets)
         logger.info("Generate tailored complete for %r at %r", body.role, body.company)
