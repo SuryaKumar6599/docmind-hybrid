@@ -110,9 +110,9 @@ function ResumeCard({
 
       {/* Card header */}
       <div className="flex flex-col items-center px-5 pt-8 pb-5">
-        {/* Document icon with status ring */}
-        <div className={`relative flex h-16 w-16 items-center justify-center rounded-2xl ${cfg.bg} mb-4`}>
-          <FileText size={28} className={cfg.color} />
+        {/* Document icon with Gold accent */}
+        <div className={`relative flex h-16 w-16 items-center justify-center rounded-2xl bg-signal/10 mb-4`}>
+          <FileText size={28} className="text-signal" />
           {/* Processing spinner overlay */}
           {(resume.status === "processing" || resume.status === "pending_processing") && (
             <div className="absolute inset-0 flex items-center justify-center rounded-2xl">
@@ -313,7 +313,7 @@ export default function Resumes() {
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading || !isSupabaseConfigured}
-            className="flex items-center gap-2 rounded-xl bg-signal px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl border-2 border-signal bg-transparent px-4 py-2 text-sm font-semibold text-signal shadow-sm hover:bg-signal/10 transition-colors disabled:opacity-50"
           >
             {uploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
             {uploading ? "Uploading…" : "Upload Resume"}
