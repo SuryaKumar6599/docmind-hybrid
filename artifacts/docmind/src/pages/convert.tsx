@@ -7,6 +7,7 @@ import {
   CopyCheck,
   Download,
   FileCode2,
+  FileText,
   FileUp,
   Hash,
   Loader2,
@@ -20,17 +21,15 @@ import { useBackendStatus } from "../lib/useBackendStatus";
 import { BackendStatusDot } from "../components/BackendStatusDot";
 import { markdownToXml } from "../lib/markdownToXml";
 
-// removed static API_URL
-
 const SUPPORTED_FORMATS = [
   { ext: "PDF", color: "bg-red-100 text-red-700" },
-  { ext: "DOCX", color: "bg-signal/10 text-signal" },
+  { ext: "DOCX", color: "bg-primary/10 text-primary" },
   { ext: "PPTX", color: "bg-orange-100 text-orange-700" },
   { ext: "XLSX", color: "bg-green-100 text-green-700" },
-  { ext: "HTML", color: "bg-amber/10 text-amber" },
-  { ext: "TXT", color: "bg-ink/5 text-ink/60" },
-  { ext: "CSV", color: "bg-moss/10 text-moss" },
-  { ext: "JSON", color: "bg-fern/10 text-fern" },
+  { ext: "HTML", color: "bg-warning/10 text-warning" },
+  { ext: "TXT", color: "bg-neutral/10 text-neutral" },
+  { ext: "CSV", color: "bg-success/10 text-success" },
+  { ext: "JSON", color: "bg-primary/10 text-primary" },
   { ext: "PNG/JPG", color: "bg-purple-100 text-purple-700" },
 ];
 
@@ -53,7 +52,20 @@ interface HistoryEntry {
 function fileTypeBadge(filename: string): { ext: string; color: string } {
   const ext = (filename.split(".").pop() || "").toUpperCase();
   const match = SUPPORTED_FORMATS.find((f) => f.ext === ext || f.ext.startsWith(ext));
-  return match ?? { ext: ext || "FILE", color: "bg-ink/5 text-ink/60" };
+  return match ?? { ext: ext || "FILE", color: "bg-neutral/10 text-neutral" };
+}
+
+function StepBadge({ number, label, active, done }: { number: number; label: string; active: boolean; done: boolean }) {
+  return (
+    <div className={`flex items-center gap-2 ${active ? "opacity-100" : done ? "opacity-70" : "opacity-35"}`}>
+      <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+        done ? "bg-success text-white" : active ? "bg-primary text-white" : "bg-ink/10 text-ink"
+      }`}>
+        {done ? <CheckCircle2 size={14} /> : number}
+      </div>
+      <span className={`text-sm font-semibold ${active ? "text-ink" : "text-body"}`}>{label}</span>
+    </div>
+  );
 }
 
 export default function Convert() {
@@ -65,9 +77,13 @@ export default function Convert() {
   const [ocrMode, setOcrMode] = useState(false);
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedMd, setCopiedMd] = useState(false);
+  const [copiedXml, setCopiedXml] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [viewFormat, setViewFormat] = useState<"markdown" | "xml">("markdown");
+
+  // Derived step state
+  const step = result ? 3 : file ? 2 : 1;
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -80,8 +96,6 @@ export default function Convert() {
     const f = e.target.files?.[0];
     if (f) { setFile(f); setResult(null); setError(null); }
   }
-
-
 
   function normalizeConvertResult(data: any, fallbackFilename: string): ConvertResult {
     const filename = String(data?.filename || fallbackFilename || "document");
@@ -99,7 +113,6 @@ export default function Convert() {
       ocr_used: Boolean(data?.ocr_used ?? false),
     };
   }
-
 
   async function convert() {
     if (!file || !API_URL) return;
@@ -120,12 +133,17 @@ export default function Convert() {
     }
   }
 
-  function copyActive() {
+  function copyText(format: "markdown" | "xml") {
     if (!result) return;
-    const text = viewFormat === "markdown" ? result.markdown : result.xml;
+    const text = format === "markdown" ? result.markdown : result.xml;
     navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      if (format === "markdown") {
+        setCopiedMd(true);
+        setTimeout(() => setCopiedMd(false), 2500);
+      } else {
+        setCopiedXml(true);
+        setTimeout(() => setCopiedXml(false), 2500);
+      }
     });
   }
 
@@ -141,7 +159,6 @@ export default function Convert() {
     URL.revokeObjectURL(url);
   }
 
-
   function reset() {
     setFile(null); setResult(null); setError(null); setOcrMode(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -149,244 +166,277 @@ export default function Convert() {
 
   const tokenColor =
     !result ? ""
-    : result.estimated_tokens < 4000 ? "text-fern"
-    : result.estimated_tokens < 8000 ? "text-amber"
-    : "text-red-500";
+    : result.estimated_tokens < 4000 ? "text-success"
+    : result.estimated_tokens < 8000 ? "text-warning"
+    : "text-error";
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
       {/* Header */}
       <header className="mb-8 border-b border-ink/10 pb-6">
-        <p className="text-xs font-semibold uppercase tracking-widest text-moss">DocMind</p>
-        <h1 className="mt-1 text-3xl font-bold text-ink">Markdown &amp; XML Generator</h1>
-        <p className="mt-2 text-sm text-ink/60">
-          Convert any document to clean Markdown using Microsoft MarkItDown — optimised for LLM input prompts. An XML version of the same extracted content is generated alongside it.
-        </p>
-      </header>
-
-      <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
-        {/* Left sidebar */}
-        <div className="space-y-4">
-          {/* Backend status */}
-          <div className="flex items-center justify-between rounded-xl border border-ink/10 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <Server size={16} /> Local backend
-            </div>
-            <BackendStatusDot status={backendStatus} apiUrl={API_URL} />
-          </div>
-
-
-          {/* Supported formats */}
-          <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
-            <p className="mb-3 text-sm font-semibold text-ink">Supported formats</p>
-            <div className="flex flex-wrap gap-1.5">
-              {SUPPORTED_FORMATS.map(({ ext, color }) => (
-                <span key={ext} className={`rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>{ext}</span>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-ink/40">
-              Images are processed via vision OCR (qwen2.5vl:7b)
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-success">DocMind</p>
+            <h1 className="mt-1 text-3xl font-bold text-ink">Document Converter</h1>
+            <p className="mt-1.5 text-sm text-body max-w-lg">
+              Convert any document to clean Markdown + XML using Microsoft MarkItDown — optimised for LLM input prompts.
             </p>
           </div>
-
-          {/* Token guide */}
-          <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
-            <p className="mb-2 text-sm font-semibold text-ink">Token budget guide</p>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-fern" />
-                <span className="text-ink/60">&lt; 4k tokens — fits comfortably</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-amber" />
-                <span className="text-ink/60">4k–8k tokens — may need compression</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-red-400" />
-                <span className="text-ink/60">&gt; 8k tokens — exceeds Qwen2.5:7b window</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Conversion history (this session) */}
-          {history.length > 0 && (
-            <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
-              <p className="mb-2 text-sm font-semibold text-ink">Recent conversions</p>
-              <p className="mb-3 text-xs text-ink/35">This session only — clears on reload.</p>
-              <ul className="space-y-1.5">
-                {history.map((h) => (
-                  <li key={h.id}>
-                    <button
-                      onClick={() => { setResult(h.result); setOcrMode(h.result.ocr_used); setError(null); setViewFormat("markdown"); }}
-                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
-                        result === h.result ? "bg-moss/10 text-moss" : "text-ink/60 hover:bg-ink/5"
-                      }`}
-                    >
-                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${fileTypeBadge(h.result.filename).color}`}>
-                        {fileTypeBadge(h.result.filename).ext}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{h.result.filename}</span>
-                      <span className="shrink-0 text-ink/30">{h.convertedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* How to use */}
-          <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
-            <p className="mb-2 text-sm font-semibold text-ink">MarkItDown Features</p>
-            <ul className="space-y-1.5 text-xs text-ink/60 list-disc list-inside">
-              <li>Converts Office docs & PDF to clean Markdown</li>
-              <li>Extracts EXIF metadata from media</li>
-              <li>Runs Vision OCR on images</li>
-              <li>Transcribes audio files</li>
-              <li>Parses tabular data (CSV/JSON/XML)</li>
-              <li>Iterates recursively through ZIP archives</li>
-            </ul>
+          <div className="hidden sm:flex items-center gap-2 rounded-xl border border-ink/10 bg-white dark:bg-white/5 px-4 py-2.5 text-sm shadow-sm">
+            <Server size={14} className="text-body" />
+            <span className="text-sm text-body font-medium">Backend</span>
+            <BackendStatusDot status={backendStatus} apiUrl={API_URL} />
           </div>
         </div>
 
-        {/* Main content */}
-        <div className="space-y-4">
-          {/* Upload area */}
+        {/* 3-Step Progress Bar */}
+        <div className="mt-6 flex items-center gap-3">
+          <StepBadge number={1} label="Upload" active={step === 1} done={step > 1} />
+          <div className={`h-px flex-1 rounded-full transition-colors ${step > 1 ? "bg-primary/40" : "bg-ink/10"}`} />
+          <StepBadge number={2} label="Convert" active={step === 2} done={step > 2} />
+          <div className={`h-px flex-1 rounded-full transition-colors ${step > 2 ? "bg-primary/40" : "bg-ink/10"}`} />
+          <StepBadge number={3} label="Results" active={step === 3} done={false} />
+        </div>
+      </header>
+
+      {/* STEP 1: Upload */}
+      {step <= 2 && (
+        <div className="space-y-5">
+          {/* Drop zone */}
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => !file && fileRef.current?.click()}
-            className={`relative cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-              dragOver ? "border-moss bg-moss/5" : file ? "border-moss/40 bg-moss/3 cursor-default" : "border-ink/15 bg-white dark:bg-white/5/60 hover:border-ink/30"
+            className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-all ${
+              dragOver
+                ? "border-primary bg-primary/5 scale-[1.01]"
+                : file
+                  ? "border-success/40 bg-success/[0.03] cursor-default"
+                  : "border-ink/15 hover:border-primary/40 hover:bg-primary/[0.02]"
             }`}
           >
             <input ref={fileRef} type="file" className="hidden" onChange={handleFile}
               accept=".pdf,.docx,.pptx,.xlsx,.html,.txt,.md,.csv,.json,.xml,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.webp" />
+
             {file ? (
-              <div className="flex items-center justify-center gap-3">
-                <FileCode2 size={28} className="text-moss" />
-                <div className="text-left">
-                  <p className="font-medium text-ink">{file.name}</p>
-                  <p className="text-xs text-ink/50">{(file.size / 1024).toFixed(1)} KB · ready to convert</p>
+              <div className="flex items-center justify-center gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-success/10 text-success">
+                  <FileText size={28} />
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); reset(); }}
-                  className="ml-auto rounded-md p-1.5 text-ink/30 hover:bg-ink/5 hover:text-ink">
-                  <RotateCcw size={14} />
+                <div className="text-left">
+                  <p className="font-semibold text-ink">{file.name}</p>
+                  <p className="mt-0.5 text-sm text-body">
+                    {(file.size / 1024).toFixed(1)} KB
+                    <span className="ml-2 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">Ready to convert</span>
+                  </p>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); reset(); }}
+                  className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-body hover:bg-ink/5 hover:text-ink transition-colors"
+                >
+                  <RotateCcw size={16} />
                 </button>
               </div>
             ) : (
               <>
-                <FileUp size={36} className="mx-auto mb-3 text-ink/25" />
-                <p className="text-sm font-medium text-ink/60">Drop a file here, or click to browse</p>
-                <p className="mt-1 text-xs text-ink/35">PDF, DOCX, PPTX, XLSX, HTML, TXT, images…</p>
+                <FileUp size={40} className="mx-auto mb-4 text-body" />
+                <p className="text-base font-semibold text-ink">Drop your file here</p>
+                <p className="mt-1.5 text-sm text-body">PDF, DOCX, PPTX, XLSX, images, and more · or click to browse</p>
+                {/* Format chips */}
+                <div className="mt-5 flex flex-wrap justify-center gap-1.5">
+                  {SUPPORTED_FORMATS.map(({ ext, color }) => (
+                    <span key={ext} className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${color}`}>{ext}</span>
+                  ))}
+                </div>
               </>
             )}
           </div>
 
-          {/* Convert button */}
-          <button
-            onClick={convert}
-            disabled={!file || loading || backendStatus !== "connected"}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-moss py-3 text-sm font-semibold text-white disabled:bg-ink/25 hover:bg-moss/90 transition-colors"
-          >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <FileCode2 size={16} />}
-            {loading
-              ? ocrMode
-                ? "Running Vision OCR… (up to 60s for scanned PDFs)"
-                : "Converting with MarkItDown…"
-              : "Convert to Markdown + XML"}
-          </button>
-
+          {/* Backend warning */}
           {backendStatus !== "connected" && (
-            <p className="rounded-xl bg-amber/10 px-4 py-3 text-sm text-amber border border-amber/20 shadow-sm">
+            <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
               {backendStatus === "starting"
                 ? "Checking connection to local backend…"
                 : API_URL
                   ? "Local backend unreachable — start FastAPI + Cloudflare Tunnel, then refresh."
-                  : <>Set <code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> to your Cloudflare tunnel URL to enable conversion.</>}
-            </p>
+                  : <><code className="font-mono text-xs">VITE_DOCMIND_API_URL</code> is not set. Add your Cloudflare tunnel URL to enable conversion.</>}
+            </div>
           )}
 
+          {/* Error */}
           {error && (
-            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-600 shadow-sm">
+            <div className="flex items-start gap-3 rounded-xl border border-error/20 bg-error/5 px-4 py-3.5 text-sm text-error">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
               {error}
             </div>
           )}
 
-          {/* Results */}
-          {result && (
-            <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 shadow-sm overflow-hidden">
-              {/* Stats bar */}
-              <div className="flex flex-wrap items-center gap-4 border-b border-ink/10 bg-paper px-4 py-3">
-                <div className="flex items-center gap-1.5 text-sm">
-                  <CheckCircle2 size={14} className="text-fern" />
-                  <span className="font-medium text-ink">{result.filename}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${fileTypeBadge(result.filename).color}`}>
-                    {fileTypeBadge(result.filename).ext}
-                  </span>
-                  {result.ocr_used && (
-                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Vision OCR</span>
+          {/* STEP 2: Convert Action */}
+          {file && (
+            <div className="rounded-2xl border border-ink/10 bg-white dark:bg-white/5 p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-ink">Ready to convert</p>
+                  <p className="mt-0.5 text-xs text-body">
+                    MarkItDown will extract text and structure it as Markdown + XML.
+                    {` `}<span className="text-body/60">Images use Vision OCR if needed.</span>
+                  </p>
+                </div>
+                <button
+                  onClick={convert}
+                  disabled={!file || loading || backendStatus !== "connected"}
+                  className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <><Loader2 size={16} className="animate-spin" />{ocrMode ? "Running Vision OCR…" : "Converting…"}</>
+                  ) : (
+                    <><FileCode2 size={16} /> Convert Document</>
                   )}
-                </div>
-                <div className="ml-auto flex items-center gap-4 text-xs">
-                  <span className="flex items-center gap-1 text-ink/50">
-                    <Hash size={11} /> {result.char_count.toLocaleString()} chars
-                  </span>
-                  <span className="flex items-center gap-1 text-ink/50">
-                    <Type size={11} /> {result.word_count.toLocaleString()} words
-                  </span>
-                  <span className={`flex items-center gap-1 font-semibold ${tokenColor}`}>
-                    <Zap size={11} /> ~{result.estimated_tokens.toLocaleString()} tokens
-                  </span>
-                </div>
+                </button>
               </div>
-
-              {/* Format toggle + actions */}
-              <div className="flex flex-wrap items-center gap-3 border-b border-ink/10 bg-paper/50 px-4 py-2.5">
-                <div className="flex rounded-md border border-ink/15 bg-white dark:bg-white/5 p-0.5 text-xs font-medium">
-                  <button onClick={() => setViewFormat("markdown")}
-                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
-                      viewFormat === "markdown" ? "bg-moss text-white" : "text-ink/50 hover:text-ink"
-                    }`}>
-                    <FileCode2 size={12} /> Markdown
-                  </button>
-                  <button onClick={() => setViewFormat("xml")}
-                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
-                      viewFormat === "xml" ? "bg-moss text-white" : "text-ink/50 hover:text-ink"
-                    }`}>
-                    <Code2 size={12} /> XML
-                  </button>
+              {loading && (
+                <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-ink/10">
+                  <div className="h-full animate-pulse rounded-full bg-primary/60 w-2/3 transition-all" />
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-                <div className="ml-auto flex gap-2">
-                  <button onClick={copyActive}
-                    className="flex items-center gap-1.5 rounded-md border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 transition-colors">
-                    {copied ? <CopyCheck size={12} className="text-fern" /> : <Copy size={12} />}
-                    {copied ? "Copied!" : `Copy ${viewFormat === "markdown" ? "Markdown" : "XML"}`}
+      {/* STEP 3: Results — Dual Pane */}
+      {result && (
+        <div className="space-y-4">
+          {/* Stats bar */}
+          <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-success/20 bg-success/5 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-success" />
+              <span className="font-semibold text-ink text-sm">{result.filename}</span>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${fileTypeBadge(result.filename).color}`}>
+                {fileTypeBadge(result.filename).ext}
+              </span>
+              {result.ocr_used && (
+                <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Vision OCR</span>
+              )}
+            </div>
+            <div className="ml-auto flex items-center gap-4 text-xs text-body">
+              <span className="flex items-center gap-1"><Hash size={11} /> {result.char_count.toLocaleString()} chars</span>
+              <span className="flex items-center gap-1"><Type size={11} /> {result.word_count.toLocaleString()} words</span>
+              <span className={`flex items-center gap-1 font-bold ${tokenColor}`}>
+                <Zap size={11} /> ~{result.estimated_tokens.toLocaleString()} tokens
+              </span>
+            </div>
+            <button
+              onClick={reset}
+              className="flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors"
+            >
+              <RotateCcw size={12} /> New File
+            </button>
+          </div>
+
+          {/* Dual Pane */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Pane: Markdown */}
+            <div className="flex flex-col rounded-2xl border border-ink/10 bg-white dark:bg-white/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-ink/8 px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <FileCode2 size={14} className="text-primary" />
+                  <span className="text-sm font-semibold text-ink">Markdown</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copyText("markdown")}
+                    className="flex items-center gap-1.5 rounded-lg bg-success/10 px-3 py-1.5 text-xs font-semibold text-success hover:bg-success/20 transition-colors"
+                  >
+                    {copiedMd ? <CopyCheck size={12} /> : <Copy size={12} />}
+                    {copiedMd ? "Copied!" : "Copy"}
                   </button>
-                  <button onClick={() => downloadFormat("markdown")}
-                    className="flex items-center gap-1.5 rounded-md border border-moss/30 px-3 py-1.5 text-xs font-medium text-moss hover:bg-moss/5 transition-colors">
+                  <button
+                    onClick={() => downloadFormat("markdown")}
+                    className="flex items-center gap-1.5 rounded-lg border border-ink/12 px-3 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors"
+                  >
                     <Download size={12} /> .md
                   </button>
-                  <button onClick={() => downloadFormat("xml")}
-                    className="flex items-center gap-1.5 rounded-md bg-moss px-3 py-1.5 text-xs font-medium text-white hover:bg-moss/90 transition-colors">
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-[520px] bg-[#0f172a]">
+                <pre className="whitespace-pre-wrap break-words p-5 font-mono text-xs leading-relaxed text-slate-300">
+                  {result.markdown}
+                </pre>
+              </div>
+            </div>
+
+            {/* Pane: XML */}
+            <div className="flex flex-col rounded-2xl border border-ink/10 bg-white dark:bg-white/5 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-ink/8 px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Code2 size={14} className="text-warning" />
+                  <span className="text-sm font-semibold text-ink">XML</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copyText("xml")}
+                    className="flex items-center gap-1.5 rounded-lg bg-success/10 px-3 py-1.5 text-xs font-semibold text-success hover:bg-success/20 transition-colors"
+                  >
+                    {copiedXml ? <CopyCheck size={12} /> : <Copy size={12} />}
+                    {copiedXml ? "Copied!" : "Copy"}
+                  </button>
+                  <button
+                    onClick={() => downloadFormat("xml")}
+                    className="flex items-center gap-1.5 rounded-lg border border-ink/12 px-3 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors"
+                  >
                     <Download size={12} /> .xml
                   </button>
                 </div>
               </div>
-
-
-              {/* Preview */}
-              <div className="max-h-[560px] overflow-y-auto">
-                <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-ink/80">
-                  {viewFormat === "markdown" ? result.markdown : result.xml}
+              <div className="flex-1 overflow-y-auto max-h-[520px] bg-[#0f172a]">
+                <pre className="whitespace-pre-wrap break-words p-5 font-mono text-xs leading-relaxed text-slate-300">
+                  {result.xml}
                 </pre>
+              </div>
+            </div>
+          </div>
+
+          {/* Future hook: workflow integration CTA */}
+          {/* HOOK: conversion_workflow_integration — on conversion complete, offer Add to Library / Use in Application */}
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ink/10 bg-white dark:bg-white/5 px-5 py-3.5 text-sm shadow-sm">
+            <p className="text-body text-sm">What's next with this document?</p>
+            <div className="ml-auto flex gap-2">
+              <button disabled className="flex items-center gap-1.5 rounded-lg border border-ink/12 px-4 py-2 text-xs font-medium text-body/50 cursor-not-allowed">
+                Add to Library <span className="text-[10px] ml-1 opacity-60">(Phase 2)</span>
+              </button>
+              <button disabled className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-4 py-2 text-xs font-semibold text-primary/50 cursor-not-allowed">
+                Use in Application <span className="text-[10px] ml-1 opacity-60">(Phase 2)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Session history */}
+          {history.length > 1 && (
+            <div className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm">
+              <p className="mb-2 text-xs font-bold uppercase tracking-widest text-body">Session History</p>
+              <div className="flex flex-wrap gap-2">
+                {history.map((h) => (
+                  <button
+                    key={h.id}
+                    onClick={() => { setResult(h.result); setOcrMode(h.result.ocr_used); setError(null); setViewFormat("markdown"); }}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                      result === h.result ? "border-primary/30 bg-primary/10 text-primary" : "border-ink/10 text-body hover:bg-ink/5"
+                    }`}
+                  >
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${fileTypeBadge(h.result.filename).color}`}>
+                      {fileTypeBadge(h.result.filename).ext}
+                    </span>
+                    <span className="max-w-[120px] truncate">{h.result.filename}</span>
+                  </button>
+                ))}
               </div>
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
