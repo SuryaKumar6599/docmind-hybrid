@@ -41,17 +41,17 @@ import { AnalyticsDashboard } from "../components/AnalyticsDashboard";
 // Status config
 // ---------------------------------------------------------------------------
 const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string; bg: string }> = {
-  to_apply:           { label: "To Apply",   color: "text-neutral",        bg: "bg-neutral/10" },
-  pending_processing: { label: "Queued",     color: "text-warning",        bg: "bg-warning/10" },
-  processing:         { label: "Processing", color: "text-primary",        bg: "bg-primary/10" },
-  stage1_complete:    { label: "Analysed",   color: "text-success",        bg: "bg-success/10" },
-  ready:              { label: "Ready",      color: "text-success",        bg: "bg-success/10" },
-  error:              { label: "Error",      color: "text-error",          bg: "bg-error/10" },
-  applied:            { label: "Applied",    color: "text-primary",        bg: "bg-primary/10" },
-  interview:          { label: "Interview",  color: "text-warning",        bg: "bg-warning/10" },
-  offer:              { label: "Offer! 🎉",  color: "text-success",        bg: "bg-success/10" },
-  rejected:           { label: "Rejected",   color: "text-neutral",        bg: "bg-neutral/10" },
-  closed:             { label: "Closed",     color: "text-neutral",        bg: "bg-neutral/10" },
+  to_apply:           { label: "To Apply",   color: "text-ink/60",  bg: "bg-ink/5" },
+  pending_processing: { label: "Queued",     color: "text-amber",   bg: "bg-amber/10" },
+  processing:         { label: "Processing", color: "text-signal",  bg: "bg-signal/10" },
+  stage1_complete:    { label: "Analysed",   color: "text-moss",    bg: "bg-moss/10" },
+  ready:              { label: "Ready",      color: "text-fern",    bg: "bg-fern/10" },
+  error:              { label: "Error",      color: "text-red-500",   bg: "bg-red-50" },
+  applied:            { label: "Applied",    color: "text-signal",  bg: "bg-signal/10" },
+  interview:          { label: "Interview",  color: "text-amber",   bg: "bg-amber/10" },
+  offer:              { label: "Offer! 🎉",  color: "text-fern",    bg: "bg-fern/20" },
+  rejected:           { label: "Rejected",   color: "text-ink/40",  bg: "bg-ink/5" },
+  closed:             { label: "Closed",     color: "text-ink/50",  bg: "bg-ink/10" },
 };
 const PIPELINE_STATUSES: ApplicationStatus[] = ["pending_processing", "processing", "stage1_complete", "ready"];
 
@@ -218,9 +218,9 @@ function AnalysisDrawer({
         {/* Header */}
         <div className="flex items-start justify-between border-b border-ink/10 px-6 py-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-success">AI Analysis</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-fern">AI Analysis</p>
             <h2 className="mt-0.5 text-lg font-bold text-ink leading-snug">{app.role}</h2>
-            <p className="text-sm text-body">{app.company_name}</p>
+            <p className="text-sm text-ink/60">{app.company_name}</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Status pill + dropdown */}
@@ -241,13 +241,13 @@ function AnalysisDrawer({
                       className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-ink/5 ${app.status === s ? "bg-ink/5" : ""}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[s].color.replace("text-", "bg-")}`} />
                       {STATUS_CONFIG[s].label}
-                      {app.status === s && <CheckCircle2 size={11} className="ml-auto text-success" />}
+                      {app.status === s && <CheckCircle2 size={11} className="ml-auto text-fern" />}
                     </button>
                   ))}
                 </div>
               )}
             </div>
-            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-body hover:bg-ink/5 hover:text-ink transition-colors">
+            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors">
               <XCircle size={20} />
             </button>
           </div>
@@ -257,24 +257,24 @@ function AnalysisDrawer({
         <div className="flex flex-wrap items-center gap-2 border-b border-ink/8 px-6 py-2.5">
           {app.jd_url && (
             <a href={app.jd_url} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-lg border border-ink/15 px-2.5 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors">
+              className="inline-flex items-center gap-1 rounded-lg border border-ink/15 px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors">
               <ExternalLink size={12} /> Source JD
             </a>
           )}
           {app.docx_url && (
             <button onClick={handleDocxDownload} disabled={downloadingDocx}
-              className="inline-flex items-center gap-1 rounded-lg border border-ink/15 px-2.5 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50">
+              className="inline-flex items-center gap-1 rounded-lg border border-ink/15 px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50">
               {downloadingDocx ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />} Download .docx
             </button>
           )}
           {showMarkAppliedCTA && !showAppliedToast && (
             <button onClick={handleMarkApplied}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-success px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity">
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-fern px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity">
               <CheckCircle2 size={12} /> Mark as Applied
             </button>
           )}
           {showAppliedToast && (
-            <div className="ml-auto flex items-center gap-1 rounded-lg bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
+            <div className="ml-auto flex items-center gap-1 rounded-lg bg-fern/10 px-3 py-1.5 text-xs font-medium text-fern">
               <CheckCircle2 size={12} /> Marked Applied!
             </div>
           )}
@@ -290,7 +290,7 @@ function AnalysisDrawer({
           ] as const).filter(t => t.show).map(t => (
             <button key={t.id} type="button" onClick={() => setActiveTab(t.id)}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                activeTab === t.id ? "bg-primary/10 text-primary font-semibold" : "text-body hover:text-ink"
+                activeTab === t.id ? "bg-signal/10 text-signal font-semibold" : "text-ink/60 hover:text-ink"
               }`}>
               {t.label}
             </button>
@@ -305,19 +305,19 @@ function AnalysisDrawer({
             <>
               {!app.stage1_analysis && !isProcessing && (
                 <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-ink/10 py-16 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-signal/10 text-signal">
                     <Sparkles size={24} />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-ink">No AI analysis yet</p>
-                    <p className="mt-1 text-xs text-body">Upload a JD file to trigger Stage 1 skill-gap analysis.</p>
+                    <p className="mt-1 text-xs text-ink/60">Upload a JD file to trigger Stage 1 skill-gap analysis.</p>
                   </div>
                 </div>
               )}
               {isProcessing && (
                 <div className="flex flex-col items-center gap-3 py-16">
-                  <Loader2 size={32} className="animate-spin text-primary" />
-                  <p className="text-sm font-medium text-body">Analyzing job description…</p>
+                  <Loader2 size={32} className="animate-spin text-signal" />
+                  <p className="text-sm font-medium text-ink/60">Analyzing job description…</p>
                 </div>
               )}
               {app.stage1_analysis && (
@@ -326,7 +326,7 @@ function AnalysisDrawer({
                   <div className="flex flex-col items-center gap-3 rounded-2xl border border-ink/10 bg-white dark:bg-white/5 py-6 shadow-sm">
                     <ScoreCircle score={app.stage1_analysis.match_score} />
                     {app.stage1_analysis.one_line_pitch && (
-                      <p className="max-w-sm text-center text-sm leading-relaxed text-body italic px-4">
+                      <p className="max-w-sm text-center text-sm leading-relaxed text-ink/60 italic px-4">
                         "{app.stage1_analysis.one_line_pitch}"
                       </p>
                     )}
@@ -335,10 +335,10 @@ function AnalysisDrawer({
                   {/* Section 2: Matched Skills vs ATS Gaps */}
                   <div className="grid grid-cols-2 gap-3">
                     {/* Matched */}
-                    <div className="rounded-xl border border-success/20 bg-success/5 p-4">
+                    <div className="rounded-xl border border-fern/20 bg-fern/5 p-4">
                       <div className="mb-3 flex items-center justify-between">
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-success/70">
-                          Matched <span className="ml-1 rounded-full bg-success/20 px-1.5 py-0.5 text-[10px] font-bold text-success">{app.stage1_analysis.matched_skills?.length ?? 0}</span>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-fern/70">
+                          Matched <span className="ml-1 rounded-full bg-fern/15 px-1.5 py-0.5 text-[10px] font-bold text-fern">{app.stage1_analysis.matched_skills?.length ?? 0}</span>
                         </p>
                         {(app.stage1_analysis.matched_skills?.length ?? 0) > 0 && (
                           <CopyButton text={app.stage1_analysis.matched_skills?.join(", ")} label="" />
@@ -347,21 +347,21 @@ function AnalysisDrawer({
                       {(app.stage1_analysis.matched_skills?.length ?? 0) > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {app.stage1_analysis.matched_skills?.map(s => (
-                            <span key={s} className="flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-[11px] font-medium text-success">
+                            <span key={s} className="flex items-center gap-1 rounded-full bg-fern/15 px-2.5 py-0.5 text-[11px] font-medium text-fern">
                               <CheckCircle2 size={10} /> {s}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-[11px] text-body italic">None matched yet</p>
+                        <p className="text-[11px] text-ink/60 italic">None matched yet</p>
                       )}
                     </div>
 
                     {/* ATS Gaps */}
-                    <div className="rounded-xl border border-error/20 bg-error/5 p-4">
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4">
                       <div className="mb-3 flex items-center justify-between">
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-error/70">
-                          ATS Gaps <span className="ml-1 rounded-full bg-error/20 px-1.5 py-0.5 text-[10px] font-bold text-error">{app.stage1_analysis.missing_keywords?.length ?? 0}</span>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-red-500/70">
+                          ATS Gaps <span className="ml-1 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-500">{app.stage1_analysis.missing_keywords?.length ?? 0}</span>
                         </p>
                         {(app.stage1_analysis.missing_keywords?.length ?? 0) > 0 && (
                           <CopyButton text={app.stage1_analysis.missing_keywords?.join(", ")} label="" />
@@ -370,13 +370,13 @@ function AnalysisDrawer({
                       {(app.stage1_analysis.missing_keywords?.length ?? 0) > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {app.stage1_analysis.missing_keywords?.map(kw => (
-                            <span key={kw} className="flex items-center gap-1 rounded-full bg-error/15 px-2.5 py-0.5 text-[11px] font-medium text-error">
+                            <span key={kw} className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-500">
                               <XCircle size={10} /> {kw}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-[11px] text-success/70 italic font-medium">No ATS gaps — strong match!</p>
+                        <p className="text-[11px] text-fern/70 italic font-medium">No ATS gaps — strong match!</p>
                       )}
                     </div>
                   </div>
@@ -384,16 +384,16 @@ function AnalysisDrawer({
                   {/* Section 3: Recommended Projects */}
                   {(app.stage1_analysis.recommended_projects?.length ?? 0) > 0 && (
                     <div>
-                      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-body">Suggested Gap Projects</p>
+                      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-ink/60">Suggested Gap Projects</p>
                       <div className="space-y-2">
                         {app.stage1_analysis.recommended_projects?.map((proj, i) => (
                           <div key={i} className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm hover:shadow-md transition-shadow">
                             <p className="text-sm font-semibold text-ink">{proj.project_title}</p>
-                            <p className="mt-1 text-xs text-body leading-relaxed">{proj.one_line_description}</p>
+                            <p className="mt-1 text-xs text-ink/60 leading-relaxed">{proj.one_line_description}</p>
                             {proj.suggested_tech_stack?.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-1">
                                 {proj.suggested_tech_stack?.map(t => (
-                                  <span key={t} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{t}</span>
+                                  <span key={t} className="rounded-full bg-signal/10 px-2 py-0.5 text-[10px] font-semibold text-signal">{t}</span>
                                 ))}
                               </div>
                             )}
@@ -406,11 +406,11 @@ function AnalysisDrawer({
                   {/* Section 4: Core Strengths */}
                   {(app.stage1_analysis.core_highlights?.length ?? 0) > 0 && (
                     <div>
-                      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-body">Core Strengths</p>
+                      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-ink/60">Core Strengths</p>
                       <ul className="space-y-2">
                         {app.stage1_analysis.core_highlights?.map((h, i) => (
                           <li key={i} className="flex items-start gap-2 text-sm text-ink/80">
-                            <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-success" />
+                            <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-fern" />
                             {h}
                           </li>
                         ))}
@@ -427,19 +427,19 @@ function AnalysisDrawer({
             <>
               {isProcessing && (
                 <div className="flex flex-col items-center gap-3 py-16">
-                  <Loader2 size={32} className="animate-spin text-primary" />
-                  <p className="text-sm font-medium text-body">Generating tailored resume…</p>
+                  <Loader2 size={32} className="animate-spin text-signal" />
+                  <p className="text-sm font-medium text-ink/60">Generating tailored resume…</p>
                 </div>
               )}
               {app.stage2_content && <Stage2Panel content={app.stage2_content} />}
-              {downloadError && <p className="text-xs text-error">{downloadError}</p>}
+              {downloadError && <p className="text-xs text-red-500">{downloadError}</p>}
             </>
           )}
 
           {/* ── JD TAB ── */}
           {activeTab === "jd" && (
-            <div className="rounded-xl border border-ink/10 bg-ink/[0.02] p-4 font-mono text-xs text-body leading-relaxed whitespace-pre-wrap">
-              {app.jd_content || <p className="text-body italic">No JD content saved. Add a URL or upload a JD file.</p>}
+            <div className="rounded-xl border border-ink/10 bg-ink/[0.02] p-4 font-mono text-xs text-ink/60 leading-relaxed whitespace-pre-wrap">
+              {app.jd_content || <p className="text-ink/60 italic">No JD content saved. Add a URL or upload a JD file.</p>}
             </div>
           )}
 
@@ -448,10 +448,10 @@ function AnalysisDrawer({
             <div className="space-y-3">
               <textarea rows={10} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Add interview notes, recruiter details, salary range…"
-                className="w-full resize-y rounded-xl border border-ink/15 bg-white dark:bg-white/5 px-4 py-3 text-sm text-ink placeholder:text-body focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none transition-all" />
+                className="w-full resize-y rounded-xl border border-ink/15 bg-white dark:bg-white/5 px-4 py-3 text-sm text-ink placeholder:text-ink/60 focus:border-primary focus:ring-2 focus:ring-signal/10 focus:outline-none transition-all" />
               <div className="flex justify-end">
                 <button onClick={saveNotes} disabled={notesSaving}
-                  className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+                  className="flex items-center gap-2 rounded-lg bg-signal px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50">
                   {notesSaving ? <Loader2 size={14} className="animate-spin" /> : notesSaved ? <CheckCircle2 size={14} /> : <Save size={14} />}
                   {notesSaving ? "Saving…" : notesSaved ? "Saved!" : "Save Notes"}
                 </button>
@@ -461,7 +461,7 @@ function AnalysisDrawer({
 
           {/* Error message */}
           {app.status === "error" && app.error_message && (
-            <div className="rounded-xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-500">
               <XCircle className="mr-1.5 inline -mt-0.5" size={14} />
               {app.error_message.slice(0, 300)}
             </div>
@@ -1184,7 +1184,7 @@ function ApplicationRow({
     <>
       <li
         className={`flex items-center gap-3 rounded-xl border bg-white dark:bg-white/5 px-4 py-3 shadow-sm transition-all hover:shadow-md ${
-          highlighted ? "border-primary/30 ring-2 ring-primary/10" : "border-ink/10 hover:border-ink/20"
+          highlighted ? "border-signal/30 ring-2 ring-signal/10" : "border-ink/10 hover:border-ink/20"
         }`}
       >
         {/* Status Icon */}
@@ -1200,10 +1200,10 @@ function ApplicationRow({
         >
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-ink">{app.role}</p>
-            <p className="truncate text-xs text-body mt-0.5">
+            <p className="truncate text-xs text-ink/60 mt-0.5">
               {app.company_name}
               {app.application_date && (
-                <span className="ml-2 text-body/60">
+                <span className="ml-2 text-ink/40">
                   {new Date(app.application_date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                 </span>
               )}
@@ -1213,9 +1213,9 @@ function ApplicationRow({
           {/* Match score badge */}
           {app.match_score != null && (
             <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-bold ${
-              app.match_score >= 75 ? "border-success/30 bg-success/10 text-success" :
-              app.match_score >= 50 ? "border-warning/30 bg-warning/10 text-warning" :
-              "border-error/30 bg-error/10 text-error"
+              app.match_score >= 75 ? "border-fern/30 bg-fern/10 text-fern" :
+              app.match_score >= 50 ? "border-amber/30 bg-amber/10 text-amber" :
+              "border-red-300 bg-red-50 text-red-500"
             }`}>
               {app.match_score}%
             </span>
@@ -1232,7 +1232,7 @@ function ApplicationRow({
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors"
+          className="shrink-0 flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors"
         >
           View <ChevronDown size={12} className="rotate-[-90deg]" />
         </button>

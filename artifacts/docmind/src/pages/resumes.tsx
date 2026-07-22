@@ -16,10 +16,10 @@ import { supabase, isSupabaseConfigured, type Resume, type ResumeStatus } from "
 import { markdownToXml } from "../lib/markdownToXml";
 
 const STATUS_CONFIG: Record<ResumeStatus, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
-  pending_processing: { label: "Queued",     color: "text-warning",  bg: "bg-warning/10",  icon: Clock },
-  processing:         { label: "Processing", color: "text-primary",  bg: "bg-primary/10",  icon: Loader2 },
-  ready:              { label: "Ready",      color: "text-success",  bg: "bg-success/10",  icon: CheckCircle2 },
-  error:              { label: "Error",      color: "text-error",    bg: "bg-error/10",    icon: XCircle },
+  pending_processing: { label: "Queued",     color: "text-amber",  bg: "bg-amber/10",  icon: Clock },
+  processing:         { label: "Processing", color: "text-signal",  bg: "bg-signal/10",  icon: Loader2 },
+  ready:              { label: "Ready",      color: "text-fern",  bg: "bg-fern/10",  icon: CheckCircle2 },
+  error:              { label: "Error",      color: "text-red-500",    bg: "bg-red-50",    icon: XCircle },
 };
 
 function ResumeCard({
@@ -96,13 +96,13 @@ function ResumeCard({
   return (
     <div className={`group relative flex flex-col rounded-2xl border bg-white dark:bg-white/5 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
       resume.is_default
-        ? "border-success/40 ring-2 ring-success/15"
+        ? "border-fern/40 ring-2 ring-success/15"
         : "border-ink/10 hover:border-ink/20"
     }`}>
       {/* Default badge */}
       {resume.is_default && (
         <div className="absolute -top-2.5 left-4">
-          <span className="flex items-center gap-1 rounded-full bg-success px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
+          <span className="flex items-center gap-1 rounded-full bg-fern px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
             <Star size={9} className="fill-white" /> Default
           </span>
         </div>
@@ -127,9 +127,9 @@ function ResumeCard({
         </p>
 
         {/* Metadata */}
-        <p className="text-xs text-body">{dateFormatted}</p>
+        <p className="text-xs text-ink/60">{dateFormatted}</p>
         {wordCount != null && (
-          <p className="text-xs text-body/60 mt-0.5">{wordCount.toLocaleString()} words</p>
+          <p className="text-xs text-ink/40 mt-0.5">{wordCount.toLocaleString()} words</p>
         )}
 
         {/* Status badge */}
@@ -140,7 +140,7 @@ function ResumeCard({
 
         {/* Tailored tag */}
         {resume.parent_resume_id && (
-          <span className="mt-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+          <span className="mt-1.5 rounded-full bg-signal/10 px-2 py-0.5 text-[10px] font-semibold text-signal">
             Tailored version
           </span>
         )}
@@ -154,7 +154,7 @@ function ResumeCard({
             <button
               onClick={handleSetDefault}
               disabled={settingDefault}
-              className="flex items-center gap-1 rounded-lg border border-ink/12 px-2.5 py-1.5 text-[11px] font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg border border-ink/12 px-2.5 py-1.5 text-[11px] font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
               title="Set as default for Quick Skills Check"
             >
               <Star size={11} /> Set Default
@@ -165,7 +165,7 @@ function ResumeCard({
           <button
             onClick={() => downloadText("markdown")}
             disabled={!resume.markdown_content}
-            className="flex items-center gap-1 rounded-lg border border-ink/12 px-2.5 py-1.5 text-[11px] font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 rounded-lg border border-ink/12 px-2.5 py-1.5 text-[11px] font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
             title="Download as Markdown"
           >
             <Download size={11} /> .md
@@ -175,7 +175,7 @@ function ResumeCard({
           <button
             onClick={() => downloadText("xml")}
             disabled={!resume.markdown_content}
-            className="flex items-center gap-1 rounded-lg border border-ink/12 px-2.5 py-1.5 text-[11px] font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 rounded-lg border border-ink/12 px-2.5 py-1.5 text-[11px] font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
             title="Download as XML"
           >
             <Download size={11} /> .xml
@@ -185,10 +185,10 @@ function ResumeCard({
           <button
             onClick={copyMarkdown}
             disabled={!resume.markdown_content}
-            className="flex items-center gap-1 rounded-lg border border-ink/12 px-2.5 py-1.5 text-[11px] font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 rounded-lg border border-ink/12 px-2.5 py-1.5 text-[11px] font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50"
             title="Copy markdown content"
           >
-            {copied ? <CopyCheck size={11} className="text-success" /> : <Copy size={11} />}
+            {copied ? <CopyCheck size={11} className="text-fern" /> : <Copy size={11} />}
             {copied ? "Copied!" : "Copy"}
           </button>
 
@@ -196,7 +196,7 @@ function ResumeCard({
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="flex items-center gap-1 rounded-lg border border-error/20 px-2.5 py-1.5 text-[11px] font-medium text-error hover:bg-error/5 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-[11px] font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
             title="Delete resume"
           >
             <Trash2 size={11} /> {deleting ? "…" : "Delete"}
@@ -205,7 +205,7 @@ function ResumeCard({
 
         {/* Error state */}
         {resume.status === "error" && (
-          <p className="mt-2 text-center text-[11px] text-error">Processing failed. Try re-uploading.</p>
+          <p className="mt-2 text-center text-[11px] text-red-500">Processing failed. Try re-uploading.</p>
         )}
       </div>
     </div>
@@ -303,9 +303,9 @@ export default function Resumes() {
       <header className="mb-8 border-b border-ink/10 pb-6">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-success">DocMind</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-fern">DocMind</p>
             <h1 className="mt-1 text-3xl font-bold text-ink">Resume Library</h1>
-            <p className="mt-1.5 text-sm text-body">
+            <p className="mt-1.5 text-sm text-ink/60">
               Your base resumes and AI-tailored versions — all in one place.
             </p>
           </div>
@@ -313,7 +313,7 @@ export default function Resumes() {
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading || !isSupabaseConfigured}
-            className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-signal px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {uploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
             {uploading ? "Uploading…" : "Upload Resume"}
@@ -326,20 +326,20 @@ export default function Resumes() {
         {resumes.length > 0 && (
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
-              <p className="text-xs font-medium text-body">Total</p>
+              <p className="text-xs font-medium text-ink/60">Total</p>
               <p className="mt-0.5 text-2xl font-bold text-ink">{resumes.length}</p>
             </div>
-            <div className="rounded-xl border border-success/20 bg-success/5 px-4 py-3 shadow-sm">
-              <p className="text-xs font-medium text-success/70">Ready</p>
-              <p className="mt-0.5 text-2xl font-bold text-success">{readyCount}</p>
+            <div className="rounded-xl border border-fern/20 bg-fern/5 px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-fern/70">Ready</p>
+              <p className="mt-0.5 text-2xl font-bold text-fern">{readyCount}</p>
             </div>
-            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 shadow-sm">
-              <p className="text-xs font-medium text-primary/70">Tailored</p>
-              <p className="mt-0.5 text-2xl font-bold text-primary">{tailoredCount}</p>
+            <div className="rounded-xl border border-signal/20 bg-primary/5 px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-signal/70">Tailored</p>
+              <p className="mt-0.5 text-2xl font-bold text-signal">{tailoredCount}</p>
             </div>
-            <div className={`rounded-xl border px-4 py-3 shadow-sm ${processingCount > 0 ? "border-warning/20 bg-warning/5" : "border-ink/8 bg-white dark:bg-white/5"}`}>
-              <p className={`text-xs font-medium ${processingCount > 0 ? "text-warning/70" : "text-body"}`}>Processing</p>
-              <p className={`mt-0.5 text-2xl font-bold ${processingCount > 0 ? "text-warning" : "text-body"}`}>
+            <div className={`rounded-xl border px-4 py-3 shadow-sm ${processingCount > 0 ? "border-amber/20 bg-amber/5" : "border-ink/8 bg-white dark:bg-white/5"}`}>
+              <p className={`text-xs font-medium ${processingCount > 0 ? "text-amber/70" : "text-ink/60"}`}>Processing</p>
+              <p className={`mt-0.5 text-2xl font-bold ${processingCount > 0 ? "text-amber" : "text-ink/60"}`}>
                 {processingCount}
               </p>
             </div>
@@ -356,23 +356,23 @@ export default function Resumes() {
         className={`mb-8 cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all ${
           dragOver
             ? "border-primary bg-primary/5 scale-[1.01]"
-            : "border-ink/15 hover:border-primary/40 hover:bg-primary/[0.02]"
+            : "border-ink/15 hover:border-signal/30 hover:bg-ink/[0.02]"
         }`}
       >
-        <UploadCloud className={`mx-auto mb-3 transition-colors ${dragOver ? "text-primary" : "text-body"}`} size={36} />
+        <UploadCloud className={`mx-auto mb-3 transition-colors ${dragOver ? "text-signal" : "text-ink/60"}`} size={36} />
         <p className="text-sm font-semibold text-ink">
           {dragOver ? "Drop to upload" : "Drag & drop your resume here"}
         </p>
-        <p className="mt-1 text-xs text-body">PDF or DOCX · 10 MB limit · or click to browse</p>
+        <p className="mt-1 text-xs text-ink/60">PDF or DOCX · 10 MB limit · or click to browse</p>
         {uploading && (
-          <div className="mt-4 flex items-center justify-center gap-2 text-sm text-primary">
+          <div className="mt-4 flex items-center justify-center gap-2 text-sm text-signal">
             <Loader2 size={16} className="animate-spin" /> Processing…
           </div>
         )}
       </section>
 
       {error && (
-        <div className="mb-6 rounded-xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">{error}</div>
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-500">{error}</div>
       )}
 
       {/* Library Grid */}
@@ -394,11 +394,11 @@ export default function Resumes() {
         </div>
       ) : resumes.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 bg-white dark:bg-white/5 px-6 py-24 text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-signal/10 text-signal">
             <FileText size={32} />
           </div>
           <h2 className="text-xl font-semibold text-ink">No resumes yet</h2>
-          <p className="mt-2 max-w-sm text-sm leading-relaxed text-body">
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-ink/60">
             Upload your base resume above. We'll automatically index it so it's ready for AI-powered tailoring.
           </p>
         </div>

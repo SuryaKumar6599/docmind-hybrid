@@ -5,28 +5,39 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-ink: #111827; /* Headings, main text */
-  --color-body: #6B7280; /* Body text */
-  --color-primary: #1D4ED8; /* Deep Professional Blue */
-  --color-success: #10B981; /* Emerald Green */
-  --color-warning: #F59E0B; /* Amber Yellow */
-  --color-neutral: #64748B; /* Slate Gray */
-  --color-error: #EF4444; /* Ruby Red */
-  
-  /* Legacy mappings to prevent breaking existing classes before full refactor */
-  --color-moss: #047857; /* Darker emerald */
-  --color-fern: #10B981; 
-  --color-paper: #ffffff; /* Clean white cards */
-  --color-signal: #1D4ED8; 
-  --color-amber: #F59E0B;
-  --color-cream: #F9FAFB; /* Off-white app background */
+  /* ── Core Ink & Surface ─────────────────────────────────────── */
+  --color-ink:    #17211d;   /* Near-black with a warm green tint  */
+  --color-body:   #5a6a62;   /* Muted mid-tone for secondary text  */
+  --color-paper:  #f7f4ed;   /* Warm off-white card surface        */
+  --color-cream:  #fdfbf7;   /* App background — barely-there warm */
+
+  /* ── Brand Palette (muted, easy on the eyes) ────────────────── */
+  --color-moss:   #315343;   /* Deep forest green — primary brand  */
+  --color-fern:   #4d7a62;   /* Medium fern — positive / success   */
+  --color-signal: #2f6fed;   /* Calm blue — actions / links        */
+  --color-amber:  #b87333;   /* Warm copper-amber — warning        */
+
+  /* ── Semantic Aliases (used in Phase 3-5 components) ────────── */
+  --color-primary: #2f6fed;  /* = signal                           */
+  --color-success: #4d7a62;  /* = fern                             */
+  --color-warning: #b87333;  /* = amber                            */
+  --color-neutral: #6b7a72;  /* Muted gray-green                   */
+  --color-error:   #b94040;  /* Muted brick-red — not eye-searing  */
 }
 
 .dark {
-  --color-ink: #F9FAFB;
-  --color-body: #9CA3AF;
-  --color-paper: #1F2937;
-  --color-cream: #111827;
+  --color-ink:    #eef2ef;
+  --color-body:   #9aada3;
+  --color-paper:  #1c2320;
+  --color-cream:  #131815;
+  --color-moss:   #4d7a62;
+  --color-fern:   #6a9e80;
+  --color-signal: #5e8ef5;
+  --color-amber:  #d4944a;
+  --color-primary: #5e8ef5;
+  --color-success: #6a9e80;
+  --color-warning: #d4944a;
+  --color-error:   #d47070;
 }
 
 * {

@@ -23,7 +23,7 @@ export function Nav() {
       
       {/* Brand (Desktop only) */}
       <div className="hidden sm:flex flex-col items-center justify-center py-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-signal/10 text-signal">
           <BrainCircuit size={24} />
         </div>
       </div>
@@ -39,8 +39,8 @@ export function Nav() {
               title={label}
               className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 sm:h-14 sm:w-14 transition-colors ${
                 active 
-                  ? "bg-primary/10 text-primary dark:bg-primary/20" 
-                  : "text-neutral hover:bg-ink/5 hover:text-ink dark:text-body dark:hover:bg-cream/10 dark:hover:text-cream"
+                  ? "bg-signal/10 text-signal dark:bg-signal/15" 
+                  : "text-ink/60 hover:bg-ink/5 hover:text-ink dark:text-ink/60 dark:hover:bg-cream/10 dark:hover:text-cream"
               }`}
             >
               <Icon size={20} strokeWidth={active ? 2.5 : 2} />
@@ -55,7 +55,7 @@ export function Nav() {
         {mounted && (
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-neutral hover:bg-ink/5 hover:text-ink dark:text-body dark:hover:bg-cream/10 dark:hover:text-cream transition-colors"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-ink/60 hover:bg-ink/5 hover:text-ink dark:text-ink/60 dark:hover:bg-cream/10 dark:hover:text-cream transition-colors"
             title="Toggle theme"
           >
             {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
@@ -63,7 +63,7 @@ export function Nav() {
         )}
         
         <button
-          className="flex h-10 w-10 items-center justify-center rounded-xl text-neutral hover:bg-ink/5 hover:text-ink dark:text-body dark:hover:bg-cream/10 dark:hover:text-cream transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-xl text-ink/60 hover:bg-ink/5 hover:text-ink dark:text-ink/60 dark:hover:bg-cream/10 dark:hover:text-cream transition-colors"
           title="Settings"
         >
           <Settings size={20} />
