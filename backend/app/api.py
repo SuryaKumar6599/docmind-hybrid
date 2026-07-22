@@ -371,7 +371,7 @@ async def extract_skills(
             temperature=0.1,
             # Suppress Qwen3 chain-of-thought (<think> tags corrupt JSON_SCHEMA parsing).
             # Ollama: sets think=false server-side. Ignored by Qwen2.5 and llama.cpp.
-            extra_body={"options": {"think": False}},
+            # extra_body={"options": {"think": False}},
         )
         result = _reconcile_keyword_contradictions(result, body.resume_text)
         logger.info("Skills extraction complete: match_score=%d", result.match_score)
@@ -538,7 +538,7 @@ async def generate_tailored(
             temperature=0.3,
             # Suppress Qwen3 chain-of-thought (<think> tags corrupt JSON_SCHEMA parsing).
             # Ollama: sets think=false server-side. Ignored by Qwen2.5 and llama.cpp.
-            extra_body={"options": {"think": False}},
+            # extra_body={"options": {"think": False}},
         )
         _log_bullet_fidelity(tailored, experience_bullets)
         logger.info("Generate tailored complete for %r at %r", body.role, body.company)

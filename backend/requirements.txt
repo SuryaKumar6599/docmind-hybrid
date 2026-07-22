@@ -16,6 +16,13 @@ supabase>=2.5.0
 openai>=1.40.0
 requests>=2.32.0
 
+# --- llama-cpp-python (optional — used when CHAT_PROVIDER=llamacpp) ---
+# Requires hardware-specific compile flags for GPU acceleration:
+#   Apple Silicon (Metal): CMAKE_ARGS="-DGGML_METAL=on" pip install "llama-cpp-python[server]>=0.3.0"
+#   NVIDIA (CUDA):         CMAKE_ARGS="-DGGML_CUDA=on"  pip install "llama-cpp-python[server]>=0.3.0"
+#   CPU-only (slow):       pip install "llama-cpp-python[server]>=0.3.0"
+llama-cpp-python[server]>=0.3.0
+
 # --- Structured LLM output — forces valid JSON via Pydantic (REQUIRED) ---
 instructor>=1.3.0
 

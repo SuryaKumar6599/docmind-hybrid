@@ -33,6 +33,28 @@ if [[ ! -f "$BACKEND_DIR/.env" ]]; then
   exit 1
 fi
 
+kill_stale_processes() {
+  echo "Checking for stale DocMind processes..."
+  # Kill anything running on our port
+  local port_pid
+  port_pid=$(lsof -t -i :"$PORT" 2>/dev/null || true)
+  if [[ -n "$port_pid" ]]; then
+    echo "  Killing stale process on port $PORT (PID $port_pid)"
+    kill -9 $port_pid 2>/dev/null || true
+  fi
+
+  # Kill old workers and tunnel managers
+  if pkill -f "python -m app.worker" 2>/dev/null; then
+    echo "  Killed stale worker processes"
+  fi
+  if pkill -f "python -m app.tunnel_manager" 2>/dev/null; then
+    echo "  Killed stale tunnel_manager processes"
+  fi
+  sleep 1
+}
+
+kill_stale_processes
+
 FASTAPI_PID=""
 WORKER_PID=""
 TUNNEL_PID=""

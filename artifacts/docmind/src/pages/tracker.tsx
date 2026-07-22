@@ -705,7 +705,8 @@ function AddAppModal({
       const userId = user?.id ?? "anonymous";
       let jdStoragePath: string | null = null;
       if (jdFile) {
-        const path = `${userId}/${Date.now()}_${jdFile.name}`;
+        const safeFilename = jdFile.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+        const path = `${userId}/${Date.now()}_${safeFilename}`;
         const { error } = await supabase.storage.from("job-descriptions").upload(path, jdFile);
         if (error) throw new Error(error.message);
         jdStoragePath = path;

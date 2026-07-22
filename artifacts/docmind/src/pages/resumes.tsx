@@ -234,7 +234,8 @@ export default function Resumes() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id ?? "anonymous";
-      const storagePath = `${userId}/${Date.now()}_${file.name}`;
+      const safeFilename = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+      const storagePath = `${userId}/${Date.now()}_${safeFilename}`;
       const { error: uploadErr } = await supabase.storage.from("resumes").upload(storagePath, file, { upsert: false });
       if (uploadErr) throw new Error(uploadErr.message);
       const { error: insertErr } = await supabase.from("resumes").insert({
