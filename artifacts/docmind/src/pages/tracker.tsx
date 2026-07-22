@@ -119,21 +119,20 @@ function exportToCSV(apps: JobApplication[]) {
 // Small helpers
 // ---------------------------------------------------------------------------
 function ScoreCircle({ score }: { score: number }) {
-  const arcColor = "#EAB308"; // AI Gold
-  const textColor = "#10B981"; // Fern Green
+  const color = score >= 75 ? "#10B981" : score >= 50 ? "#F59E0B" : "#EF4444";
   const circumference = 2 * Math.PI * 36;
   const filled = (score / 100) * circumference;
   return (
     <div className="flex flex-col items-center gap-1">
       <svg width="96" height="96" viewBox="0 0 96 96">
         <circle cx="48" cy="48" r="36" fill="none" stroke="#E5E7EB" strokeWidth="8" />
-        <circle cx="48" cy="48" r="36" fill="none" stroke={arcColor} strokeWidth="8"
+        <circle cx="48" cy="48" r="36" fill="none" stroke={color} strokeWidth="8"
           strokeDasharray={`${filled} ${circumference}`} strokeLinecap="round"
           transform="rotate(-90 48 48)" style={{ transition: "stroke-dasharray 0.6s ease" }} />
-        <text x="48" y="44" textAnchor="middle" fontSize="22" fontWeight="700" fill={textColor}>{score}</text>
+        <text x="48" y="44" textAnchor="middle" fontSize="22" fontWeight="700" fill={color}>{score}</text>
         <text x="48" y="60" textAnchor="middle" fontSize="11" fill="#6B7280">/ 100</text>
       </svg>
-      <span className="text-xs font-semibold" style={{ color: textColor }}>
+      <span className="text-xs font-semibold" style={{ color }}>
         {score >= 75 ? "Strong Match" : score >= 50 ? "Moderate Match" : "Needs Work"}
       </span>
     </div>
@@ -1365,10 +1364,11 @@ export default function Tracker() {
     : null;
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
-      <header className="mb-6 border-b border-ink/10 pb-6">
+      <header className="mb-8 border-b border-ink/10 pb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-ink">Command Center</h1>
+            <p className="text-xs font-semibold uppercase tracking-widest text-moss">DocMind</p>
+            <h1 className="mt-1 text-3xl font-bold text-ink">Application Tracker</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="hidden sm:flex items-center gap-2 rounded-lg border border-ink/10 bg-white dark:bg-white/5 px-3 py-1.5 text-[11px] font-medium text-ink/60 shadow-sm">
@@ -1388,6 +1388,13 @@ export default function Tracker() {
               <Sparkles size={13} /> Quick Skills
             </button>
 
+            <button onClick={() => setShowAnalytics(!showAnalytics)}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors ${
+                showAnalytics ? "border-signal bg-signal/10 text-signal" : "border-ink/15 text-ink/60 hover:bg-ink/5 hover:text-ink"
+              }`}>
+              <BarChart2 size={13} /> Analytics
+            </button>
+
             {apps.length > 0 && (
               <button onClick={() => exportToCSV(apps)}
                 className="hidden sm:flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors shadow-sm">
@@ -1395,7 +1402,7 @@ export default function Tracker() {
               </button>
             )}
             <button onClick={() => setShowModal(true)} disabled={!isSupabaseConfigured}
-              className="flex items-center gap-1.5 rounded-lg bg-signal px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-signal/90 transition-colors disabled:bg-ink/25">
+              className="flex items-center gap-1.5 rounded-lg bg-moss px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-moss/90 transition-colors disabled:bg-ink/25">
               <PlusCircle size={13} /> Add
             </button>
           </div>
@@ -1432,43 +1439,60 @@ export default function Tracker() {
         </div>
       )}
 
-      {apps.length > 0 && (
-        <div className="mb-8 space-y-8 animate-in slide-in-from-top-4 fade-in duration-300">
-          
-          {/* Command Center 3-Block KPIs */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-6 py-5 shadow-sm">
-              <p className="text-sm font-medium text-ink/60">Total Applications</p>
-              <p className="mt-1 text-4xl font-bold text-ink">{apps.length}</p>
+      {showAnalytics && apps.length > 0 && (
+        <div className="mb-8 space-y-6 animate-in slide-in-from-top-4 fade-in duration-300">
+          {/* Stats bar */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Total Tracked</p>
+              <p className="mt-0.5 text-2xl font-bold text-ink">{apps.length}</p>
+              <p className="mt-0.5 text-[10px] text-ink/30">{completedCount} completed</p>
             </div>
-            
-            <div className="rounded-xl bg-fern px-6 py-5 text-white shadow-sm">
-              <p className="text-sm font-medium text-white/80">Offers</p>
-              <p className="mt-1 text-4xl font-bold text-white">{counts.offer}</p>
+            <button
+              onClick={() => { setStatusFilter(statusFilter === "all" ? "interview" : "all"); setShowAnalytics(false); }}
+              className="rounded-xl border border-amber/20 bg-amber/5 px-4 py-3 shadow-sm text-left transition-all hover:border-amber/40 hover:shadow-md"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-amber/70">In Progress</p>
+                {processingCount > 0 && <span className="flex h-1.5 w-1.5 rounded-full bg-signal animate-pulse" />}
+              </div>
+              <p className="mt-0.5 text-2xl font-bold text-amber">{inProgressCount}</p>
+              <p className="mt-0.5 text-[10px] text-amber/50">click to filter</p>
+            </button>
+            <div className={`rounded-xl border px-4 py-3 shadow-sm ${counts.offer > 0 ? "border-fern/30 bg-fern/5" : "border-ink/8 bg-white dark:bg-white/5"}`}>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-ink/50">Offers</p>
+                {counts.offer > 0 && <span className="flex h-2 w-2 rounded-full bg-fern animate-pulse" />}
+              </div>
+              <p className={`mt-0.5 text-2xl font-bold ${counts.offer > 0 ? "text-fern" : "text-ink/30"}`}>{counts.offer}</p>
             </div>
-            
-            <div className="rounded-xl bg-signal px-6 py-5 text-white shadow-sm">
-              <p className="text-sm font-medium text-white/80">Interviews Scheduled</p>
-              <p className="mt-1 text-4xl font-bold text-white">{counts.interview}</p>
+            <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium text-ink/50">Avg. Match Score</p>
+              <p className={`mt-0.5 text-2xl font-bold ${averageScore != null ? matchScoreAccent(averageScore) : "text-ink/30"}`}>
+                {averageScore != null ? `${averageScore}%` : "—"}
+              </p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-ink/8 bg-white dark:bg-white/5 p-6 shadow-sm">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-ink">Performance Analytics</h3>
-              <div className="flex gap-2">
-                <span className="rounded border border-ink/10 px-2 py-1 text-xs text-ink/50">Charts V</span>
-                <span className="rounded border border-ink/10 px-2 py-1 text-xs text-ink/50">Charts V</span>
-              </div>
-            </div>
-            <div className="-mx-6 border-t border-ink/5 pt-4">
-              <AnalyticsDashboard apps={apps} />
-            </div>
+          {/* Pipeline summary */}
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+            {(["to_apply", "applied", "interview", "offer", "rejected", "closed"] as ApplicationStatus[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => { setStatusFilter(statusFilter === s ? "all" : s); setShowAnalytics(false); }}
+                className={`rounded-xl border p-3 text-center transition-all hover:shadow-md ${
+                  statusFilter === s
+                    ? `${STATUS_CONFIG[s].bg} border-current shadow-sm ring-1 ring-current/30`
+                    : "border-ink/10 bg-white dark:bg-white/5 hover:border-ink/20"
+                } ${STATUS_CONFIG[s].color}`}
+              >
+                <p className="text-2xl font-bold">{counts[s]}</p>
+                <p className="text-[11px] font-medium opacity-70 mt-0.5">{STATUS_CONFIG[s].label}</p>
+              </button>
+            ))}
           </div>
           
-          <div className="flex items-center justify-between border-b border-ink/10 pb-4">
-            <h3 className="text-lg font-semibold text-ink">Applications ({apps.length})</h3>
-          </div>
+          <AnalyticsDashboard apps={apps} />
         </div>
       )}
 

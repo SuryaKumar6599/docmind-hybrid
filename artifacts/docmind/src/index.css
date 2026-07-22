@@ -8,36 +8,36 @@
   /* ── Core Ink & Surface ─────────────────────────────────────── */
   --color-ink:    #17211d;   /* Near-black with a warm green tint  */
   --color-body:   #5a6a62;   /* Muted mid-tone for secondary text  */
-  --color-paper:  #ffffff;   /* Pure white card surface for contrast */
-  --color-cream:  #fef3c7;   /* Cream 100 — Warm AI Gold background */
+  --color-paper:  #f7f4ed;   /* Warm off-white card surface        */
+  --color-cream:  #fdfbf7;   /* App background — barely-there warm */
 
-  /* ── Brand Palette (Warm Professional Co-Pilot) ─────────────── */
-  --color-moss:   #315343;   /* Deep forest green  */
-  --color-fern:   #10B981;   /* Emerald 500 — positive / success */
-  --color-signal: #EAB308;   /* Amber 500 — Paige Yellow / AI Gold (Primary Action) */
-  --color-amber:  #F59E0B;   /* Amber 500 */
+  /* ── Brand Palette (muted, easy on the eyes) ────────────────── */
+  --color-moss:   #315343;   /* Deep forest green — primary brand  */
+  --color-fern:   #4d7a62;   /* Medium fern — positive / success   */
+  --color-signal: #2f6fed;   /* Calm blue — actions / links        */
+  --color-amber:  #b87333;   /* Warm copper-amber — warning        */
 
   /* ── Semantic Aliases (used in Phase 3-5 components) ────────── */
-  --color-primary: #EAB308;  /* = signal / AI Gold                 */
-  --color-success: #10B981;  /* = fern                             */
-  --color-warning: #F59E0B;  /* = amber                            */
+  --color-primary: #2f6fed;  /* = signal                           */
+  --color-success: #4d7a62;  /* = fern                             */
+  --color-warning: #b87333;  /* = amber                            */
   --color-neutral: #6b7a72;  /* Muted gray-green                   */
-  --color-error:   #ef4444;  /* Red 500                            */
+  --color-error:   #b94040;  /* Muted brick-red — not eye-searing  */
 }
 
 .dark {
-  --color-ink:    #fef3c7;
-  --color-body:   #9ca3af;
-  --color-paper:  #1f2937;
-  --color-cream:  #111827;
+  --color-ink:    #eef2ef;
+  --color-body:   #9aada3;
+  --color-paper:  #1c2320;
+  --color-cream:  #131815;
   --color-moss:   #4d7a62;
-  --color-fern:   #10B981;
-  --color-signal: #EAB308;
-  --color-amber:  #F59E0B;
-  --color-primary: #EAB308;
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-error:   #ef4444;
+  --color-fern:   #6a9e80;
+  --color-signal: #5e8ef5;
+  --color-amber:  #d4944a;
+  --color-primary: #5e8ef5;
+  --color-success: #6a9e80;
+  --color-warning: #d4944a;
+  --color-error:   #d47070;
 }
 
 * {
