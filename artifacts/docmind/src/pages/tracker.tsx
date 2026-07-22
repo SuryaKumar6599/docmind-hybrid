@@ -41,17 +41,17 @@ import { AnalyticsDashboard } from "../components/AnalyticsDashboard";
 // Status config
 // ---------------------------------------------------------------------------
 const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string; bg: string }> = {
-  to_apply:           { label: "To Apply",  color: "text-ink/60",  bg: "bg-ink/5" },
-  pending_processing: { label: "Queued",    color: "text-amber",   bg: "bg-amber/10" },
-  processing:         { label: "Processing",color: "text-signal",  bg: "bg-signal/10" },
-  stage1_complete:    { label: "Analysed",  color: "text-moss",    bg: "bg-moss/10" },
-  ready:              { label: "Ready",     color: "text-fern",    bg: "bg-fern/10" },
-  error:              { label: "Error",     color: "text-red-500", bg: "bg-red-50" },
-  applied:            { label: "Applied",   color: "text-signal",  bg: "bg-signal/10" },
-  interview:          { label: "Interview", color: "text-moss",    bg: "bg-moss/10" },
-  offer:              { label: "Offer!",    color: "text-fern",    bg: "bg-fern/20" },
-  rejected:           { label: "Rejected",  color: "text-ink/40",  bg: "bg-ink/5" },
-  closed:             { label: "Closed",    color: "text-ink/50",  bg: "bg-ink/10" },
+  to_apply:           { label: "To Apply",   color: "text-neutral",        bg: "bg-neutral/10" },
+  pending_processing: { label: "Queued",     color: "text-warning",        bg: "bg-warning/10" },
+  processing:         { label: "Processing", color: "text-primary",        bg: "bg-primary/10" },
+  stage1_complete:    { label: "Analysed",   color: "text-success",        bg: "bg-success/10" },
+  ready:              { label: "Ready",      color: "text-success",        bg: "bg-success/10" },
+  error:              { label: "Error",      color: "text-error",          bg: "bg-error/10" },
+  applied:            { label: "Applied",    color: "text-primary",        bg: "bg-primary/10" },
+  interview:          { label: "Interview",  color: "text-warning",        bg: "bg-warning/10" },
+  offer:              { label: "Offer! 🎉",  color: "text-success",        bg: "bg-success/10" },
+  rejected:           { label: "Rejected",   color: "text-neutral",        bg: "bg-neutral/10" },
+  closed:             { label: "Closed",     color: "text-neutral",        bg: "bg-neutral/10" },
 };
 const PIPELINE_STATUSES: ApplicationStatus[] = ["pending_processing", "processing", "stage1_complete", "ready"];
 
@@ -119,18 +119,356 @@ function exportToCSV(apps: JobApplication[]) {
 // Small helpers
 // ---------------------------------------------------------------------------
 function ScoreCircle({ score }: { score: number }) {
-  const color = score >= 75 ? "#4caf7d" : score >= 50 ? "#f5a623" : "#ef4444";
+  const color = score >= 75 ? "#10B981" : score >= 50 ? "#F59E0B" : "#EF4444";
+  const circumference = 2 * Math.PI * 36;
+  const filled = (score / 100) * circumference;
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <svg width="52" height="52" viewBox="0 0 52 52">
-        <circle cx="26" cy="26" r="22" fill="none" stroke="#e5e7eb" strokeWidth="5" />
-        <circle cx="26" cy="26" r="22" fill="none" stroke={color} strokeWidth="5"
-          strokeDasharray={`${(score / 100) * 138.2} 138.2`} strokeLinecap="round"
-          transform="rotate(-90 26 26)" />
-        <text x="26" y="31" textAnchor="middle" fontSize="13" fontWeight="700" fill={color}>{score}</text>
+    <div className="flex flex-col items-center gap-1">
+      <svg width="96" height="96" viewBox="0 0 96 96">
+        <circle cx="48" cy="48" r="36" fill="none" stroke="#E5E7EB" strokeWidth="8" />
+        <circle cx="48" cy="48" r="36" fill="none" stroke={color} strokeWidth="8"
+          strokeDasharray={`${filled} ${circumference}`} strokeLinecap="round"
+          transform="rotate(-90 48 48)" style={{ transition: "stroke-dasharray 0.6s ease" }} />
+        <text x="48" y="44" textAnchor="middle" fontSize="22" fontWeight="700" fill={color}>{score}</text>
+        <text x="48" y="60" textAnchor="middle" fontSize="11" fill="#6B7280">/ 100</text>
       </svg>
-      <span className="text-xs text-ink/40">/ 100</span>
+      <span className="text-xs font-semibold" style={{ color }}>
+        {score >= 75 ? "Strong Match" : score >= 50 ? "Moderate Match" : "Needs Work"}
+      </span>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Analysis Drawer — right-aligned overlay sheet
+// ---------------------------------------------------------------------------
+function AnalysisDrawer({
+  app,
+  open,
+  onClose,
+  onStatusChange,
+}: {
+  app: JobApplication;
+  open: boolean;
+  onClose: () => void;
+  onStatusChange: (id: string, status: ApplicationStatus) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<"analysis" | "tailored" | "jd" | "notes">("analysis");
+  const [notes, setNotes] = useState(app.notes ?? "");
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusRef = useRef<HTMLDivElement>(null);
+  const [downloadingDocx, setDownloadingDocx] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [showAppliedToast, setShowAppliedToast] = useState(false);
+  const isProcessing = PIPELINE_STATUSES.includes(app.status) && app.status !== "ready";
+  const showMarkAppliedCTA = app.status === "ready" || app.status === "stage1_complete";
+  const cfg = STATUS_CONFIG[app.status];
+
+  useEffect(() => setNotes(app.notes ?? ""), [app.notes]);
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  useEffect(() => {
+    if (!statusOpen) return;
+    function h(e: MouseEvent) {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) setStatusOpen(false);
+    }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [statusOpen]);
+
+  async function saveNotes() {
+    setNotesSaving(true);
+    await supabase.from("job_applications").update({ notes }).eq("id", app.id);
+    setNotesSaving(false);
+    setNotesSaved(true);
+    setTimeout(() => setNotesSaved(false), 2000);
+  }
+
+  async function handleDocxDownload() {
+    if (!app.docx_url || downloadingDocx) return;
+    setDownloadingDocx(true); setDownloadError(null);
+    try { await openStorageUrl("tailored-resumes", app.docx_url); }
+    catch (err) { setDownloadError(err instanceof Error ? err.message : "Download failed."); }
+    finally { setDownloadingDocx(false); }
+  }
+
+  function handleMarkApplied() {
+    onStatusChange(app.id, "applied");
+    setShowAppliedToast(true);
+    setTimeout(() => setShowAppliedToast(false), 3000);
+  }
+
+  if (!open) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-ink/30 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Drawer */}
+      <div className="fixed right-0 top-0 bottom-0 z-50 flex w-full max-w-xl flex-col bg-paper shadow-2xl overflow-hidden dark:bg-[#1F2937]">
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-ink/10 px-6 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-success">AI Analysis</p>
+            <h2 className="mt-0.5 text-lg font-bold text-ink leading-snug">{app.role}</h2>
+            <p className="text-sm text-body">{app.company_name}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Status pill + dropdown */}
+            <div ref={statusRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setStatusOpen(o => !o)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80 ${cfg.color} ${cfg.bg}`}
+              >
+                {isProcessing && <Loader2 className="animate-spin" size={11} />}
+                {cfg.label} <ChevronDown size={11} />
+              </button>
+              {statusOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border border-ink/10 bg-white dark:bg-white/5 py-1 shadow-xl">
+                  {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
+                    <button key={s} type="button"
+                      onClick={() => { onStatusChange(app.id, s); setStatusOpen(false); }}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-ink/5 ${app.status === s ? "bg-ink/5" : ""}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[s].color.replace("text-", "bg-")}`} />
+                      {STATUS_CONFIG[s].label}
+                      {app.status === s && <CheckCircle2 size={11} className="ml-auto text-success" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-body hover:bg-ink/5 hover:text-ink transition-colors">
+              <XCircle size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Action bar */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-ink/8 px-6 py-2.5">
+          {app.jd_url && (
+            <a href={app.jd_url} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-lg border border-ink/15 px-2.5 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors">
+              <ExternalLink size={12} /> Source JD
+            </a>
+          )}
+          {app.docx_url && (
+            <button onClick={handleDocxDownload} disabled={downloadingDocx}
+              className="inline-flex items-center gap-1 rounded-lg border border-ink/15 px-2.5 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors disabled:opacity-50">
+              {downloadingDocx ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />} Download .docx
+            </button>
+          )}
+          {showMarkAppliedCTA && !showAppliedToast && (
+            <button onClick={handleMarkApplied}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-success px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity">
+              <CheckCircle2 size={12} /> Mark as Applied
+            </button>
+          )}
+          {showAppliedToast && (
+            <div className="ml-auto flex items-center gap-1 rounded-lg bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
+              <CheckCircle2 size={12} /> Marked Applied!
+            </div>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 border-b border-ink/10 bg-ink/[0.02] px-6 py-2">
+          {([
+            { id: "analysis" as const, label: "AI Analysis", show: true },
+            { id: "tailored" as const, label: "Tailored Resume", show: Boolean(app.stage2_content) || isProcessing },
+            { id: "jd" as const, label: "Job Description", show: Boolean(app.jd_content || app.jd_url) },
+            { id: "notes" as const, label: "Notes", show: true },
+          ] as const).filter(t => t.show).map(t => (
+            <button key={t.id} type="button" onClick={() => setActiveTab(t.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                activeTab === t.id ? "bg-primary/10 text-primary font-semibold" : "text-body hover:text-ink"
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {/* ── ANALYSIS TAB ── */}
+          {activeTab === "analysis" && (
+            <>
+              {!app.stage1_analysis && !isProcessing && (
+                <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-ink/10 py-16 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Sparkles size={24} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-ink">No AI analysis yet</p>
+                    <p className="mt-1 text-xs text-body">Upload a JD file to trigger Stage 1 skill-gap analysis.</p>
+                  </div>
+                </div>
+              )}
+              {isProcessing && (
+                <div className="flex flex-col items-center gap-3 py-16">
+                  <Loader2 size={32} className="animate-spin text-primary" />
+                  <p className="text-sm font-medium text-body">Analyzing job description…</p>
+                </div>
+              )}
+              {app.stage1_analysis && (
+                <>
+                  {/* Section 1: Hero Match Score */}
+                  <div className="flex flex-col items-center gap-3 rounded-2xl border border-ink/10 bg-white dark:bg-white/5 py-6 shadow-sm">
+                    <ScoreCircle score={app.stage1_analysis.match_score} />
+                    {app.stage1_analysis.one_line_pitch && (
+                      <p className="max-w-sm text-center text-sm leading-relaxed text-body italic px-4">
+                        "{app.stage1_analysis.one_line_pitch}"
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Section 2: Matched Skills vs ATS Gaps */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Matched */}
+                    <div className="rounded-xl border border-success/20 bg-success/5 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-success/70">
+                          Matched <span className="ml-1 rounded-full bg-success/20 px-1.5 py-0.5 text-[10px] font-bold text-success">{app.stage1_analysis.matched_skills?.length ?? 0}</span>
+                        </p>
+                        {(app.stage1_analysis.matched_skills?.length ?? 0) > 0 && (
+                          <CopyButton text={app.stage1_analysis.matched_skills?.join(", ")} label="" />
+                        )}
+                      </div>
+                      {(app.stage1_analysis.matched_skills?.length ?? 0) > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {app.stage1_analysis.matched_skills?.map(s => (
+                            <span key={s} className="flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-[11px] font-medium text-success">
+                              <CheckCircle2 size={10} /> {s}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-body italic">None matched yet</p>
+                      )}
+                    </div>
+
+                    {/* ATS Gaps */}
+                    <div className="rounded-xl border border-error/20 bg-error/5 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-error/70">
+                          ATS Gaps <span className="ml-1 rounded-full bg-error/20 px-1.5 py-0.5 text-[10px] font-bold text-error">{app.stage1_analysis.missing_keywords?.length ?? 0}</span>
+                        </p>
+                        {(app.stage1_analysis.missing_keywords?.length ?? 0) > 0 && (
+                          <CopyButton text={app.stage1_analysis.missing_keywords?.join(", ")} label="" />
+                        )}
+                      </div>
+                      {(app.stage1_analysis.missing_keywords?.length ?? 0) > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {app.stage1_analysis.missing_keywords?.map(kw => (
+                            <span key={kw} className="flex items-center gap-1 rounded-full bg-error/15 px-2.5 py-0.5 text-[11px] font-medium text-error">
+                              <XCircle size={10} /> {kw}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-success/70 italic font-medium">No ATS gaps — strong match!</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Section 3: Recommended Projects */}
+                  {(app.stage1_analysis.recommended_projects?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-body">Suggested Gap Projects</p>
+                      <div className="space-y-2">
+                        {app.stage1_analysis.recommended_projects?.map((proj, i) => (
+                          <div key={i} className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-4 shadow-sm hover:shadow-md transition-shadow">
+                            <p className="text-sm font-semibold text-ink">{proj.project_title}</p>
+                            <p className="mt-1 text-xs text-body leading-relaxed">{proj.one_line_description}</p>
+                            {proj.suggested_tech_stack?.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {proj.suggested_tech_stack?.map(t => (
+                                  <span key={t} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Section 4: Core Strengths */}
+                  {(app.stage1_analysis.core_highlights?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-body">Core Strengths</p>
+                      <ul className="space-y-2">
+                        {app.stage1_analysis.core_highlights?.map((h, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-ink/80">
+                            <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-success" />
+                            {h}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {/* ── TAILORED TAB ── */}
+          {activeTab === "tailored" && (
+            <>
+              {isProcessing && (
+                <div className="flex flex-col items-center gap-3 py-16">
+                  <Loader2 size={32} className="animate-spin text-primary" />
+                  <p className="text-sm font-medium text-body">Generating tailored resume…</p>
+                </div>
+              )}
+              {app.stage2_content && <Stage2Panel content={app.stage2_content} />}
+              {downloadError && <p className="text-xs text-error">{downloadError}</p>}
+            </>
+          )}
+
+          {/* ── JD TAB ── */}
+          {activeTab === "jd" && (
+            <div className="rounded-xl border border-ink/10 bg-ink/[0.02] p-4 font-mono text-xs text-body leading-relaxed whitespace-pre-wrap">
+              {app.jd_content || <p className="text-body italic">No JD content saved. Add a URL or upload a JD file.</p>}
+            </div>
+          )}
+
+          {/* ── NOTES TAB ── */}
+          {activeTab === "notes" && (
+            <div className="space-y-3">
+              <textarea rows={10} value={notes} onChange={e => setNotes(e.target.value)}
+                placeholder="Add interview notes, recruiter details, salary range…"
+                className="w-full resize-y rounded-xl border border-ink/15 bg-white dark:bg-white/5 px-4 py-3 text-sm text-ink placeholder:text-body focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none transition-all" />
+              <div className="flex justify-end">
+                <button onClick={saveNotes} disabled={notesSaving}
+                  className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+                  {notesSaving ? <Loader2 size={14} className="animate-spin" /> : notesSaved ? <CheckCircle2 size={14} /> : <Save size={14} />}
+                  {notesSaving ? "Saving…" : notesSaved ? "Saved!" : "Save Notes"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Error message */}
+          {app.status === "error" && app.error_message && (
+            <div className="rounded-xl border border-error/20 bg-error/5 px-4 py-3 text-sm text-error">
+              <XCircle className="mr-1.5 inline -mt-0.5" size={14} />
+              {app.error_message.slice(0, 300)}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -823,448 +1161,94 @@ function AddAppModal({
 }
 
 // ---------------------------------------------------------------------------
-// Application row — with notes editing, cover letter, bullets diff
+// Application Row — clean single-line scannable list item
 // ---------------------------------------------------------------------------
 function ApplicationRow({
   app,
   onStatusChange,
-  onNotesSave,
   highlighted = false,
 }: {
   app: JobApplication;
   onStatusChange: (id: string, status: ApplicationStatus) => void;
-  onNotesSave: (id: string, notes: string) => void;
   highlighted?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(highlighted);
-  const [notes, setNotes] = useState(app.notes ?? "");
-  const [notesSaving, setNotesSaving] = useState(false);
-  const [notesSaved, setNotesSaved] = useState(false);
-  const [showAppliedToast, setShowAppliedToast] = useState(false);
-  const [downloadingDocx, setDownloadingDocx] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"analysis" | "tailored" | "jd" | "notes">("analysis");
+  const [drawerOpen, setDrawerOpen] = useState(highlighted);
   const cfg = STATUS_CONFIG[app.status];
-  const statusTimeline = (Object.keys(STATUS_CONFIG) as ApplicationStatus[])
-    .map((status) => ({ status, date: app.status_dates?.[status] }))
-    .filter((item): item is { status: ApplicationStatus; date: string } => Boolean(item.date));
+  const isProcessing = PIPELINE_STATUSES.includes(app.status) && app.status !== "ready";
 
   useEffect(() => {
-    if (highlighted) setExpanded(true);
+    if (highlighted) setDrawerOpen(true);
   }, [highlighted]);
 
-  async function handleDocxDownload() {
-    if (!app.docx_url || downloadingDocx) return;
-    setDownloadingDocx(true);
-    setDownloadError(null);
-    try {
-      await openStorageUrl("tailored-resumes", app.docx_url);
-    } catch (err) {
-      setDownloadError(err instanceof Error ? err.message : "Download failed.");
-    } finally {
-      setDownloadingDocx(false);
-    }
-  }
-  const currentStatusDate = app.status_dates?.[app.status];
-  const isProcessing = PIPELINE_STATUSES.includes(app.status) && app.status !== "ready";
-  const showMarkAppliedCTA = app.status === "ready" || app.status === "stage1_complete";
-
-  function handleMarkApplied() {
-    onStatusChange(app.id, "applied");
-    setShowAppliedToast(true);
-    setTimeout(() => setShowAppliedToast(false), 3000);
-  }
-
-  async function saveNotes() {
-    setNotesSaving(true);
-    await onNotesSave(app.id, notes);
-    setNotesSaving(false);
-    setNotesSaved(true);
-    setTimeout(() => setNotesSaved(false), 2000);
-  }
-
-  const [statusOpen, setStatusOpen] = useState(false);
-  const statusRef = useRef<HTMLDivElement>(null);
-
-  // Close status popover on outside click
-  useEffect(() => {
-    if (!statusOpen) return;
-    function handleOutside(e: MouseEvent) {
-      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
-        setStatusOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [statusOpen]);
-
   return (
-    <li className={`rounded-xl border bg-white dark:bg-white/5 shadow-sm transition-shadow duration-150 ${highlighted ? "border-moss/40 ring-2 ring-moss/15 shadow-moss/5" : "border-ink/10 hover:shadow-md hover:border-ink/20"}`}>
-      {/* ── Row header: two independent click zones ── */}
-      <div className="flex items-center gap-3 px-4 py-3.5">
+    <>
+      <li
+        className={`flex items-center gap-3 rounded-xl border bg-white dark:bg-white/5 px-4 py-3 shadow-sm transition-all hover:shadow-md ${
+          highlighted ? "border-primary/30 ring-2 ring-primary/10" : "border-ink/10 hover:border-ink/20"
+        }`}
+      >
+        {/* Status Icon */}
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${cfg.bg}`}>
+          <Briefcase className={cfg.color} size={15} />
+        </div>
 
-        {/* LEFT ZONE — clicking here toggles expand/collapse */}
+        {/* Main content — click to open drawer */}
         <button
           type="button"
-          onClick={() => setExpanded(v => !v)}
-          className="flex flex-1 min-w-0 items-center gap-3 text-left"
+          onClick={() => setDrawerOpen(true)}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${cfg.bg} transition-colors`}>
-            <Briefcase className={cfg.color} size={15} />
-          </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-ink leading-tight">
-              {app.role}
-            </p>
-            <p className="truncate text-xs text-ink/50 mt-0.5">
+            <p className="truncate text-sm font-semibold text-ink">{app.role}</p>
+            <p className="truncate text-xs text-body mt-0.5">
               {app.company_name}
               {app.application_date && (
-                <span className="ml-2 text-ink/35">
-                  {new Date(app.application_date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                </span>
-              )}
-              {app.match_score != null && (
-                <span className={`ml-2 font-semibold ${matchScoreAccent(app.match_score)}`}>
-                  {app.match_score}%
+                <span className="ml-2 text-body/60">
+                  {new Date(app.application_date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                 </span>
               )}
             </p>
           </div>
+
+          {/* Match score badge */}
+          {app.match_score != null && (
+            <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-bold ${
+              app.match_score >= 75 ? "border-success/30 bg-success/10 text-success" :
+              app.match_score >= 50 ? "border-warning/30 bg-warning/10 text-warning" :
+              "border-error/30 bg-error/10 text-error"
+            }`}>
+              {app.match_score}%
+            </span>
+          )}
         </button>
 
-        {/* RIGHT ZONE — status pill (click to change) + chevron (click to expand) */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          {/* Status pill — clicking opens popover, does NOT toggle row */}
-          <div ref={statusRef} className="relative">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setStatusOpen(o => !o); }}
-              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-opacity hover:opacity-80 ${cfg.color} ${cfg.bg}`}
-            >
-              {isProcessing && <Loader2 className="animate-spin" size={11} />}
-              {cfg.label}
-            </button>
-            {statusOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border border-ink/10 bg-white dark:bg-white/5 py-1 shadow-xl">
-                {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStatusChange(app.id, s);
-                      setStatusOpen(false);
-                    }}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-ink/5 ${app.status === s ? "bg-ink/5" : ""}`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[s].bg.replace("bg-", "bg-").replace("/10", "").replace("/5", "")} ${STATUS_CONFIG[s].color.replace("text-", "bg-")}`} />
-                    {STATUS_CONFIG[s].label}
-                    {app.status === s && <CheckCircle2 size={11} className="ml-auto text-moss" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Status pill */}
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.color} ${cfg.bg} flex items-center gap-1`}>
+          {isProcessing && <Loader2 className="animate-spin" size={10} />}
+          {cfg.label}
+        </span>
 
-          {/* Expand/collapse chevron button */}
-          <button
-            type="button"
-            onClick={() => setExpanded(v => !v)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-ink/30 transition-colors hover:bg-ink/5 hover:text-ink/60"
-          >
-            {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
-        </div>
-      </div>
+        {/* View Analysis button */}
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          className="shrink-0 flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-body hover:bg-ink/5 hover:text-ink transition-colors"
+        >
+          View <ChevronDown size={12} className="rotate-[-90deg]" />
+        </button>
+      </li>
 
-      {expanded && (
-        <div className="border-t border-ink/10 px-5 pb-5 pt-4 space-y-4">
-
-          {/* Action bar */}
-          <div className="flex flex-wrap items-center gap-2">
-            {app.jd_url && (
-              <a href={app.jd_url} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ink/12 px-2.5 py-1.5 text-xs font-medium text-ink/60 hover:bg-ink/5 hover:text-ink transition-colors">
-                <ExternalLink size={12} /> Source JD
-              </a>
-            )}
-            {statusTimeline.length > 0 && (
-              <p className="ml-auto text-[11px] text-ink/35 hidden sm:block">
-                {statusTimeline.map(({ status, date }) => `${STATUS_CONFIG[status].label}: ${formatStatusDate(date)}`).join(" · ")}
-              </p>
-            )}
-            {showMarkAppliedCTA && !showAppliedToast && (
-              <button onClick={handleMarkApplied}
-                className="ml-auto flex items-center gap-1.5 rounded-lg bg-fern px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-fern/90 transition-colors">
-                <CheckCircle2 size={12} /> Mark as Applied
-              </button>
-            )}
-            {showAppliedToast && (
-              <div className="ml-auto flex items-center gap-1.5 rounded-lg bg-fern/10 px-3 py-1.5 text-xs font-medium text-fern">
-                <CheckCircle2 size={12} /> Marked applied!
-              </div>
-            )}
-          </div>
-
-          {/* Tab bar */}
-          <div className="flex gap-1 rounded-xl border border-ink/10 bg-ink/[0.03] p-1">
-            {[
-              { id: "analysis" as const, label: "AI Analysis", show: Boolean(app.stage1_analysis) },
-              { id: "tailored" as const, label: "Tailored Resume", show: Boolean(app.stage2_content) || isProcessing },
-              { id: "jd" as const, label: "Job Description", show: Boolean(app.jd_content || app.jd_url) },
-              { id: "notes" as const, label: "Notes", show: true },
-            ].filter((t) => t.show).map((t) => (
-              <button key={t.id} type="button" onClick={() => setActiveTab(t.id)}
-                className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                  activeTab === t.id ? "bg-white dark:bg-white/5 shadow-sm text-ink font-semibold" : "text-ink/45 hover:text-ink/70"
-                }`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Analysis tab — no data yet */}
-          {activeTab === "analysis" && !app.stage1_analysis && !isProcessing && (
-            <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-ink/10 px-6 py-10 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-signal/10 text-signal">
-                <Sparkles size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-ink/70">No AI analysis yet</p>
-                <p className="mt-1 text-xs text-ink/40">Upload a JD file to trigger Stage 1 skill-gap analysis.</p>
-              </div>
-            </div>
-          )}
-
-          {/* Analysis tab */}
-          {activeTab === "analysis" && app.stage1_analysis && (
-            <div className="rounded-xl border border-ink/10 bg-paper p-4 text-sm">
-              {/* Score + pitch row */}
-              <div className="flex items-start gap-4 mb-4 pb-4 border-b border-ink/8">
-                <ScoreCircle score={app.stage1_analysis.match_score} />
-                <div className="flex-1 min-w-0">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-moss">FAANG-Standard AI Analysis</p>
-                    <p className="text-[10px] text-ink/35">
-                      Last analysed {new Date(app.updated_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-                    </p>
-                  </div>
-                  <p className="text-ink/70 italic text-xs leading-relaxed">"{app.stage1_analysis.one_line_pitch}"</p>
-                </div>
-              </div>
-              {/* 2-col skill gap visualizer: Matched vs Missing */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-fern/15 bg-fern/5 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-fern/70 uppercase tracking-wide">
-                      Matched <span className="ml-1 rounded-full bg-fern/20 px-1.5 py-0.5 text-[10px] font-bold text-fern">{app.stage1_analysis.matched_skills?.length ?? 0}</span>
-                    </p>
-                    {app.stage1_analysis.matched_skills?.length > 0 && (
-                      <CopyButton text={app.stage1_analysis.matched_skills?.join(", ")} label="" />
-                    )}
-                  </div>
-                  {app.stage1_analysis.matched_skills?.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {app.stage1_analysis.matched_skills?.map((s) => (
-                        <span key={s} className="rounded-full bg-fern/15 px-2.5 py-0.5 text-xs font-medium text-fern">{s}</span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-ink/30 italic">None matched yet</p>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-amber/15 bg-amber/5 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-amber/70 uppercase tracking-wide">
-                      ATS Gaps <span className="ml-1 rounded-full bg-amber/20 px-1.5 py-0.5 text-[10px] font-bold text-amber">{app.stage1_analysis.missing_keywords?.length ?? 0}</span>
-                    </p>
-                    {app.stage1_analysis.missing_keywords?.length > 0 && (
-                      <CopyButton text={app.stage1_analysis.missing_keywords?.join(", ")} label="" />
-                    )}
-                  </div>
-                  {app.stage1_analysis.missing_keywords?.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {app.stage1_analysis.missing_keywords?.map((kw) => (
-                        <span key={kw} className="rounded-full bg-amber/15 px-2.5 py-0.5 text-xs font-medium text-amber">{kw}</span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-fern/60 italic font-medium">No ATS gaps — strong match!</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Core Strengths — full width below */}
-              {app.stage1_analysis.core_highlights?.length > 0 && (
-                <div className="rounded-xl border border-moss/15 bg-moss/5 p-3">
-                  <p className="text-xs font-semibold text-moss/70 uppercase tracking-wide mb-2">Core Strengths</p>
-                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                    {app.stage1_analysis.core_highlights?.map((h) => (
-                      <div key={h} className="flex items-start gap-1.5 text-xs text-ink/70 leading-relaxed">
-                        <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={11} />{h}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {app.stage1_analysis.recommended_projects?.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-ink/50 uppercase tracking-wide mb-2 mt-1">Suggested Skill-Gap Projects</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {app.stage1_analysis.recommended_projects?.map((p) => (
-                      <div key={p.project_title} className="rounded-xl border border-ink/10 bg-white dark:bg-white/5 p-3.5 text-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="font-semibold text-ink text-xs leading-snug">{p.project_title}</p>
-                          <div className="flex flex-wrap justify-end gap-1 shrink-0">
-                            {p.skills_targeted?.map(s => (
-                              <span key={s} className="rounded bg-amber/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber">{s}</span>
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-ink/55 mt-2 leading-relaxed">{p.one_line_description}</p>
-                        {p.suggested_tech_stack?.length > 0 && (
-                          <p className="mt-2 text-[10px] font-mono text-moss/80 bg-moss/5 rounded px-2 py-1 inline-block">
-                            {p.suggested_tech_stack?.join(" · ")}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Tailored content tab */}
-          {activeTab === "tailored" && app.stage2_content && (
-            <Stage2Panel content={app.stage2_content} />
-          )}
-          {activeTab === "tailored" && !app.stage2_content && isProcessing && (
-            <div className="space-y-4 animate-pulse">
-              <div className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3">
-                <div className="mb-3 h-3 w-32 rounded bg-ink/10" />
-                <div className="space-y-2">
-                  <div className="h-2.5 w-full rounded bg-ink/5" />
-                  <div className="h-2.5 w-5/6 rounded bg-ink/5" />
-                  <div className="h-2.5 w-4/5 rounded bg-ink/5" />
-                </div>
-              </div>
-              <div className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3">
-                <div className="mb-3 h-3 w-28 rounded bg-ink/10" />
-                <div className="space-y-2">
-                  <div className="h-2.5 w-full rounded bg-ink/5" />
-                  <div className="h-2.5 w-11/12 rounded bg-ink/5" />
-                  <div className="h-2.5 w-3/4 rounded bg-ink/5" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3 h-24" />
-                <div className="rounded-md border border-ink/10 bg-white dark:bg-white/5 p-3 h-24" />
-              </div>
-            </div>
-          )}
-          {activeTab === "tailored" && !app.stage2_content && !isProcessing && (
-            <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-ink/10 px-6 py-10 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-moss/10 text-moss">
-                <FileText size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-ink/70">AI tailoring not triggered yet</p>
-                <p className="mt-1 text-xs text-ink/40">Upload a JD file when adding this application to run the full tailoring pipeline.</p>
-              </div>
-              {app.jd_url && (
-                <a href={app.jd_url} target="_blank" rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-signal/10 px-3 py-1.5 text-xs font-medium text-signal hover:bg-signal/20 transition-colors">
-                  <ExternalLink size={12} /> View JD Source
-                </a>
-              )}
-            </div>
-          )}
-
-          {/* JD tab */}
-          {activeTab === "jd" && (
-            <div className="rounded-xl border border-ink/10 bg-paper p-4 text-sm">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Saved Job Description</p>
-                {app.jd_content && <CopyButton text={app.jd_content} label="Copy JD" />}
-              </div>
-              {app.jd_content ? (
-                <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-xl border border-ink/5 bg-white dark:bg-white/5 p-4 font-mono text-xs leading-relaxed text-ink/70">
-                  {app.jd_content}
-                </pre>
-              ) : app.jd_url ? (
-                <div className="flex flex-col items-center gap-3 py-6 text-center">
-                  <p className="text-sm text-ink/50">No text copy stored — view the original posting:</p>
-                  <a href={app.jd_url} target="_blank" rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-lg border border-signal/30 bg-signal/8 px-4 py-2 text-sm font-medium text-signal hover:bg-signal/15 transition-colors">
-                    <ExternalLink size={14} /> Open Job Posting
-                  </a>
-                </div>
-              ) : (
-                <p className="text-sm text-ink/40">No JD saved. Add a URL above or upload a JD file to trigger AI analysis.</p>
-              )}
-            </div>
-          )}
-
-          {/* Notes tab */}
-          {activeTab === "notes" && (
-            <div className="space-y-3">
-              <textarea
-                rows={5}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={saveNotes}
-                placeholder="Add notes — recruiter name, interview prep, salary range, referral contact…"
-                className="w-full resize-y rounded-xl border border-ink/15 bg-paper px-4 py-3 text-sm placeholder:text-ink/30 focus:border-moss focus:ring-2 focus:ring-moss/10 focus:outline-none transition-all shadow-sm" />
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[11px] text-ink/30">Auto-saves on focus loss</span>
-                <div className="flex items-center gap-3">
-                  <button onClick={saveNotes} disabled={notesSaving}
-                    className="flex items-center gap-1.5 rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/10 transition-colors disabled:opacity-50">
-                    {notesSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
-                    {notesSaving ? "Saving…" : "Save"}
-                  </button>
-                  {notesSaved && <span className="flex items-center gap-1 text-xs text-fern"><CheckCircle2 size={11} /> Saved</span>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Downloads */}
-          {(app.docx_url || app.pdf_url) && (
-            <div className="flex gap-2 pt-2 border-t border-ink/5 mt-4">
-              {app.docx_url && (
-                <button type="button" onClick={handleDocxDownload} disabled={downloadingDocx}
-                  className="flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-50 shadow-sm transition-colors">
-                  {downloadingDocx ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Download DOCX
-                </button>
-              )}
-              {app.pdf_url && (
-                <a href={app.pdf_url}
-                  className="flex items-center gap-1.5 rounded-lg bg-signal px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-signal/90 transition-colors">
-                  <Download size={13} /> Download PDF
-                </a>
-              )}
-            </div>
-          )}
-
-          {downloadError && (
-            <p className="text-xs text-red-500">{downloadError}</p>
-          )}
-
-          {/* Error */}
-          {app.status === "error" && app.error_message && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm mt-3">
-              <XCircle className="mr-1.5 inline -mt-0.5" size={14} />
-              {app.error_message.slice(0, 300)}
-            </div>
-          )}
-        </div>
-      )}
-    </li>
+      {/* Analysis Drawer */}
+      <AnalysisDrawer
+        app={app}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onStatusChange={onStatusChange}
+      />
+    </>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Main Tracker page
@@ -1559,7 +1543,6 @@ export default function Tracker() {
               key={app.id}
               app={app}
               onStatusChange={updateStatus}
-              onNotesSave={saveNotes}
               highlighted={app.id === highlightedId}
             />
           ))}

@@ -1,21 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-ink: #17211d;
-  --color-moss: #315343;
-  --color-fern: #5c7f68;
-  --color-paper: #f7f4ed;
-  --color-signal: #2f6fed;
-  --color-amber: #c8812f;
-  --color-cream: #fdfbf7;
+  --color-ink: #111827; /* Headings, main text */
+  --color-body: #6B7280; /* Body text */
+  --color-primary: #1D4ED8; /* Deep Professional Blue */
+  --color-success: #10B981; /* Emerald Green */
+  --color-warning: #F59E0B; /* Amber Yellow */
+  --color-neutral: #64748B; /* Slate Gray */
+  --color-error: #EF4444; /* Ruby Red */
+  
+  /* Legacy mappings to prevent breaking existing classes before full refactor */
+  --color-moss: #047857; /* Darker emerald */
+  --color-fern: #10B981; 
+  --color-paper: #ffffff; /* Clean white cards */
+  --color-signal: #1D4ED8; 
+  --color-amber: #F59E0B;
+  --color-cream: #F9FAFB; /* Off-white app background */
 }
 
 .dark {
-  --color-ink: #fdfbf7;
-  --color-cream: #0f1115;
-  --color-paper: #1a1c21;
+  --color-ink: #F9FAFB;
+  --color-body: #9CA3AF;
+  --color-paper: #1F2937;
+  --color-cream: #111827;
 }
 
 * {
@@ -24,12 +35,11 @@
 
 body {
   margin: 0;
-  color: #17211d;
-  background:
-    linear-gradient(180deg, rgba(247, 244, 237, 0.98), rgba(238, 242, 235, 0.95)),
-    radial-gradient(circle at top left, rgba(47, 111, 237, 0.12), transparent 28rem);
+  color: var(--color-ink);
+  background-color: var(--color-cream);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,

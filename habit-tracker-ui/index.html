@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Atomic Habits - 1% Better Every Day</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div class="app-container">
+      <header class="hero scroll-reveal">
+        <div class="hero-content">
+          <div class="badge">Atomic Habits</div>
+          <h1>1% Better Every Day</h1>
+          <p class="subtitle">Small habits compound into extraordinary results.</p>
+        </div>
+        
+        <!-- Rive Canvas for a subtle animation graphic -->
+        <div class="rive-container">
+          <canvas id="rive-canvas" width="400" height="400"></canvas>
+        </div>
+      </header>
+
+      <main>
+        <section class="calculator-section scroll-reveal">
+          <div class="card glass">
+            <h2>Track Daily Progress</h2>
+            <div class="input-group">
+              <label for="total-habits">Total Habits for Today</label>
+              <input type="number" id="total-habits" value="5" min="1" />
+            </div>
+            <div class="input-group">
+              <label for="completed-habits">Habits Completed</label>
+              <input type="number" id="completed-habits" value="3" min="0" />
+            </div>
+            
+            <div class="result-display">
+              <div class="progress-circle-container">
+                <svg class="progress-ring" width="120" height="120">
+                  <circle class="progress-ring__circle bg" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="transparent" r="52" cx="60" cy="60"/>
+                  <circle class="progress-ring__circle fg" stroke="#00ffcc" stroke-width="8" fill="transparent" r="52" cx="60" cy="60"/>
+                </svg>
+                <div class="percentage-text" id="daily-percentage">60%</div>
+              </div>
+              <p class="formula-text">P = <span id="formula-d">3</span> / <span id="formula-t">5</span> = <span id="formula-dec">0.60</span></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="graph-section scroll-reveal delay-1">
+          <div class="card glass">
+            <h2>The Compounding Effect</h2>
+            <p class="description">If you improve by 1% every day for a year, you'll be <strong>37.78x</strong> better.</p>
+            <div class="chart-container">
+              <canvas id="compound-chart"></canvas>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
